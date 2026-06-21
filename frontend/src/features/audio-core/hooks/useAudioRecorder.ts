@@ -344,26 +344,24 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         await audioContext.resume();
       }
 
-      // Initialize Playout Queue Manager if not already
-      if (!playoutQueueRef.current) {
-        const queue = new PlaybackQueueManager(audioContext);
-        queue.onSentenceStart = (sentenceText) => {
-          setCurrentPlayingSentence(sentenceText);
-          setHighlightedWordIndex(-1);
-          updateStatus('SPEAKING');
-        };
-        queue.onWordSpoken = (_wordText, index) => {
-          setHighlightedWordIndex(index);
-        };
-        queue.onQueueEmpty = () => {
-          logger.log('[useAudioRecorder] Playout queue empty. Turn complete, auto-transitioning to LISTENING');
-          setCurrentPlayingSentence('');
-          setHighlightedWordIndex(-1);
-          setIsRecording(true);
-          updateStatus('LISTENING');
-        };
-        playoutQueueRef.current = queue;
-      }
+      // Initialize Playout Queue Manager for the current session
+      const queue = new PlaybackQueueManager(audioContext);
+      queue.onSentenceStart = (sentenceText) => {
+        setCurrentPlayingSentence(sentenceText);
+        setHighlightedWordIndex(-1);
+        updateStatus('SPEAKING');
+      };
+      queue.onWordSpoken = (_wordText, index) => {
+        setHighlightedWordIndex(index);
+      };
+      queue.onQueueEmpty = () => {
+        logger.log('[useAudioRecorder] Playout queue empty. Turn complete, auto-transitioning to LISTENING');
+        setCurrentPlayingSentence('');
+        setHighlightedWordIndex(-1);
+        setIsRecording(true);
+        updateStatus('LISTENING');
+      };
+      playoutQueueRef.current = queue;
 
       await audioContext.audioWorklet.addModule(WORKLET_MODULE_URL);
       const workletNode = new AudioWorkletNode(audioContext, 'audio-capture-processor');
