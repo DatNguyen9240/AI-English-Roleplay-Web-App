@@ -292,7 +292,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
 
         // 1. Interruption Check (during SPEAKING state)
         if (currentStatus === 'SPEAKING') {
-          const volume = vadProcessorRef.current?.getVolume() ?? 0;
+          const volume = vadProcessorRef.current?.updateVolume(inputData) ?? 0;
           const interruptionThreshold = audioConfig.interruptionVolumeThreshold;
           if (volume > interruptionThreshold) {
             logger.log(`[useAudioRecorder] Interruption detected. Volume: ${volume.toFixed(3)} (Threshold: ${interruptionThreshold.toFixed(3)})`);

@@ -263,7 +263,7 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       }
 
     } catch (err) {
-      if (err.name === 'AbortError' || session.abortController?.signal.aborted) {
+      if (err.name === 'AbortError' || signal.aborted) {
         logger.info(
           { sessionId: socket.id, requestId },
           'Generation task aborted successfully.'

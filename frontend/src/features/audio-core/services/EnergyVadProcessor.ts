@@ -46,6 +46,16 @@ export class EnergyVadProcessor {
     return this.speakingActive;
   }
 
+  /** Updates the current RMS volume without running silence detection logic */
+  updateVolume(inputData: Float32Array): number {
+    let sum = 0;
+    for (let i = 0; i < inputData.length; i++) {
+      sum += inputData[i] * inputData[i];
+    }
+    this.currentRms = Math.sqrt(sum / inputData.length);
+    return this.currentRms;
+  }
+
   /** Returns the current raw RMS volume reading */
   getVolume(): number {
     return this.currentRms;
