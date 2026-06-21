@@ -16,7 +16,7 @@ RUN npm ci --prefix backend
 # Copy backend application source
 COPY backend/ ./backend/
 
-EXPOSE 5001
+EXPOSE 5000
 
 WORKDIR /usr/src/app/backend
 CMD [ "npm", "start" ]

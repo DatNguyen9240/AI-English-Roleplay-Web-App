@@ -23,9 +23,9 @@ services:
     container_name: ai_roleplay_backend
     restart: always
     ports:
-      - "5001:5001"
+      - "5000:5000"
     environment:
-      - PORT=5001
+      - PORT=5000
       - DATABASE_URL=postgresql://postgres:password123@db:5432/ai_roleplay?schema=public
       - NODE_ENV=development
     depends_on:
