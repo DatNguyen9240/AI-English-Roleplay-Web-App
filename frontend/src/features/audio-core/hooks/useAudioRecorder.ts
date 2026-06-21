@@ -209,6 +209,9 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
           clearTimeout(sttTimeoutRef.current ?? undefined);
           logger.log(`[STT] Completed in ${latencyMs}ms: "${text}"`);
           setTranscript(text);
+          setLlmText('');
+          setCurrentPlayingSentence('');
+          setHighlightedWordIndex(-1);
           updateStatus('THINKING');
 
         // Start LLM timeout watchdog

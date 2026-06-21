@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { TranscriptDisplay } from '@/features/conversation/components/TranscriptDisplay';
 import { SubtitleDisplay } from '@/features/conversation/components/SubtitleDisplay';
 import { RecordingStatus } from 'shared-contracts';
+import { Mic, Volume2, Loader2, AlertCircle, Play, HelpCircle } from 'lucide-react';
 
 interface AudioDashboardProps {
   isRecording: boolean;
@@ -52,11 +53,11 @@ export function AudioDashboard({
         AI English Roleplay
       </h1>
       <p className="text-sm text-slate-400 text-center mb-8">
-        Practice English conversations with an interactive AI tutor.
+        Practice spoken English with an interactive AI tutor.
       </p>
 
-      {/* FSM State Indicator */}
-      <div className="flex flex-col items-center justify-center mb-8">
+      {/* FSM State Circle Visualizer */}
+      <div className="flex flex-col items-center justify-center mb-6">
         <div className={`w-28 h-28 rounded-full flex items-center justify-center border-4 transition-all duration-300 ${
           status === 'LISTENING'   ? 'border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.3)] animate-pulse' :
           status === 'PROCESSING' ? 'border-amber-500  shadow-[0_0_20px_rgba(245,158,11,0.3)]  animate-pulse' :
@@ -72,6 +73,42 @@ export function AudioDashboard({
           </span>
         </div>
       </div>
+
+      {/* Dynamic Turn Guidance Badge */}
+      {isRecording && (
+        <div className="w-full flex justify-center mb-6">
+          {status === 'LISTENING' && (
+            <div className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-full flex items-center gap-2 animate-pulse font-mono uppercase tracking-wider">
+              <Mic className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />
+              Your Turn: Speak now!
+            </div>
+          )}
+          {status === 'SPEAKING' && (
+            <div className="text-xs font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-4 py-2 rounded-full flex items-center gap-2 font-mono uppercase tracking-wider">
+              <Volume2 className="w-3.5 h-3.5 text-violet-400 animate-pulse" />
+              AI is Speaking...
+            </div>
+          )}
+          {status === 'THINKING' && (
+            <div className="text-xs font-bold text-teal-400 bg-teal-500/10 border border-teal-500/20 px-4 py-2 rounded-full flex items-center gap-2 font-mono uppercase tracking-wider">
+              <Loader2 className="w-3.5 h-3.5 text-teal-400 animate-spin" />
+              AI is Thinking...
+            </div>
+          )}
+          {status === 'PROCESSING' && (
+            <div className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-full flex items-center gap-2 font-mono uppercase tracking-wider">
+              <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+              Processing Voice...
+            </div>
+          )}
+          {status === 'ERROR' && (
+            <div className="text-xs font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-4 py-2 rounded-full flex items-center gap-2 font-mono uppercase tracking-wider">
+              <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+              An error occurred
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Volume Visualizer — visible only during active recording */}
       {isRecording && (
@@ -125,10 +162,28 @@ export function AudioDashboard({
               id="btn-start-recording"
               onClick={() => startRecording(topic.trim() || undefined)}
               disabled={isDisabled}
-              className="w-full py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white transition-colors shadow-lg shadow-blue-500/10 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white transition-colors shadow-lg shadow-blue-500/10 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
+              <Play className="w-4 h-4 fill-white" />
               {topic.trim() ? `Start Scenario: ${topic.trim()}` : startButtonLabel}
             </button>
+
+            {/* Quick Guide Onboard */}
+            <div className="w-full border-t border-slate-800 pt-6 mt-4 text-left">
+              <div className="flex items-center gap-1.5 mb-3">
+                <HelpCircle className="w-4 h-4 text-slate-300" />
+                <h3 className="text-xs font-bold text-slate-300 font-mono uppercase tracking-wider">
+                  How It Works
+                </h3>
+              </div>
+              <ul className="text-xs text-slate-400 space-y-2 font-sans list-decimal pl-4">
+                <li>Type what topic you want to practice and click <strong>Start</strong>.</li>
+                <li>The AI will speak first and ask a question. Listen and read along.</li>
+                <li>When the AI finishes, the mic turns on automatically. Speak your reply.</li>
+                <li>Stop speaking for <strong>1.5 seconds</strong> to send, or type/paste below anytime.</li>
+                <li><em>Tip: Speak over the AI at any time to interrupt it!</em></li>
+              </ul>
+            </div>
           </>
         ) : (
           <>
