@@ -1,5 +1,5 @@
 import React from 'react';
-import type { RecordingStatus } from '../../../types/audio';
+import type { RecordingStatus } from '@/types/audio';
 
 interface TranscriptDisplayProps {
   status: RecordingStatus;

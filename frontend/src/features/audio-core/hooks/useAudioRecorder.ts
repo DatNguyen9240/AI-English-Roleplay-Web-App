@@ -4,18 +4,20 @@ import { audioConfig } from '../config/audioConfig';
 import { EnergyVadProcessor } from '../services/EnergyVadProcessor';
 import { SocketIOStreamer } from '../services/SocketIOStreamer';
 import { SOCKET_EVENTS } from '../constants/socketEvents';
-import { logger } from '../../../utils/logger';
-import type { RecordingStatus } from '../../../types/audio';
+import { logger } from '@/utils/logger';
+import type { RecordingStatus } from '@/types/audio';
 
 const SAMPLES_PER_CHUNK = (audioConfig.targetSampleRate * audioConfig.chunkDurationMs) / 1000;
 const WORKLET_MODULE_URL = '/worklets/audio-capture-processor.worklet.js';
 const STT_TIMEOUT_MS = 15_000;
+const LLM_TIMEOUT_MS = 30_000;
 
 export interface UseAudioRecorderReturn {
   isRecording: boolean;
   status: RecordingStatus;
   rmsVolume: number;
   transcript: string;
+  llmText: string;
   startRecording: () => Promise<void>;
   stopRecording: () => void;
 }
@@ -23,10 +25,11 @@ export interface UseAudioRecorderReturn {
 /**
  * Custom React hook coordinating the full turn-taking audio pipeline.
  *
- * State machine:
+ * State machine (README Section 6):
  *   IDLE → LISTENING (startRecording)
  *   LISTENING → PROCESSING (stopRecording / VAD silence)
- *   PROCESSING → IDLE (stt-completed received)
+ *   PROCESSING → THINKING (stt-completed received)
+ *   THINKING → IDLE (llm-stream-done received)
  *   any → ERROR (socket/mic error)
  */
 export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
@@ -34,6 +37,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [status, setStatus] = useState<RecordingStatus>('IDLE');
   const [rmsVolume, setRmsVolume] = useState(0);
   const [transcript, setTranscript] = useState('');
+  const [llmText, setLlmText] = useState('');
 
   // Services — lazily initialized once per mount
   const streamerRef = useRef<SocketIOStreamer | null>(null);
@@ -52,12 +56,13 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const sequenceNumberRef = useRef(0);
   const lastVolumeUpdateRef = useRef(0);
   const sttTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const llmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Forward refs to avoid stale closure issues
   const stopAudioRef = useRef<() => void>(() => undefined);
   const stopRecordingRef = useRef<() => void>(() => undefined);
 
-  /** Stops mic/worklet/AudioContext — socket stays alive until stt-completed */
+  /** Stops mic/worklet/AudioContext — socket stays alive until llm-stream-done */
   const stopAudio = useCallback((): void => {
     setIsRecording(false);
     setRmsVolume(0);
@@ -86,7 +91,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     lastVolumeUpdateRef.current = 0;
   }, []);
 
-  /** Stops audio, signals server, enters PROCESSING. Socket kept alive for stt-completed. */
+  /** Stops audio, signals server, enters PROCESSING. Socket kept alive. */
   const stopRecording = useCallback((): void => {
     stopAudio();
     setStatus('PROCESSING');
@@ -105,6 +110,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   /** Force-disconnects everything immediately — used only on unmount */
   const forceCleanup = useCallback((): void => {
     clearTimeout(sttTimeoutRef.current ?? undefined);
+    clearTimeout(llmTimeoutRef.current ?? undefined);
     stopAudioRef.current();
     streamerRef.current?.sendSpeechEnd();
     streamerRef.current?.disconnect();
@@ -119,6 +125,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setIsRecording(true);
     setStatus('LISTENING');
     setTranscript('');
+    setLlmText('');
     sequenceNumberRef.current = 0;
     audioBufferQueueRef.current = [];
     vadProcessorRef.current?.reset();
@@ -138,16 +145,38 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         },
       });
 
+      // ── STT result → transition to THINKING ─────────────────────────────
       streamerRef.current!.on(SOCKET_EVENTS.STT_COMPLETED, ({ transcript: text, latencyMs }) => {
         clearTimeout(sttTimeoutRef.current ?? undefined);
         logger.log(`[STT] Completed in ${latencyMs}ms: "${text}"`);
         setTranscript(text);
+        setStatus('THINKING');
+
+        // Start LLM timeout watchdog
+        llmTimeoutRef.current = setTimeout(() => {
+          logger.warn('[LLM] Timeout — no llm-stream-done received');
+          setStatus('ERROR');
+          streamerRef.current?.disconnect();
+        }, LLM_TIMEOUT_MS);
+      });
+
+      // ── LLM tokens → accumulate into llmText ────────────────────────────
+      streamerRef.current!.on(SOCKET_EVENTS.LLM_STREAM_CHUNK, ({ token }) => {
+        setLlmText((prev) => prev + token);
+      });
+
+      // ── LLM stream done → return to IDLE ────────────────────────────────
+      streamerRef.current!.on(SOCKET_EVENTS.LLM_STREAM_DONE, ({ latencyMs }) => {
+        clearTimeout(llmTimeoutRef.current ?? undefined);
+        logger.log(`[LLM] Stream done in ${latencyMs}ms`);
         setStatus('IDLE');
         streamerRef.current?.disconnect();
       });
 
+      // ── Error handler ────────────────────────────────────────────────────
       streamerRef.current!.on(SOCKET_EVENTS.SESSION_ERROR, ({ message }) => {
         clearTimeout(sttTimeoutRef.current ?? undefined);
+        clearTimeout(llmTimeoutRef.current ?? undefined);
         logger.error('[Socket] Session error:', message);
         setStatus('ERROR');
         streamerRef.current?.disconnect();
@@ -212,5 +241,5 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     }
   }, [socketUrl]);
 
-  return { isRecording, status, rmsVolume, transcript, startRecording, stopRecording };
+  return { isRecording, status, rmsVolume, transcript, llmText, startRecording, stopRecording };
 }

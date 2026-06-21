@@ -2,7 +2,7 @@ const { spawn } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
-const { buildWavBuffer } = require('../../utils/wavBuilder');
+const { buildWavBuffer } = require('@utils/wavBuilder');
 
 /**
  * Abstract STT (Speech-to-Text) service interface.

@@ -13,6 +13,7 @@ const SOCKET_EVENTS = {
   // ── Server → Client ────────────────────────────────────────────────────────
   STT_COMPLETED:    'stt-completed',
   LLM_STREAM_CHUNK: 'llm-stream-chunk',
+  LLM_STREAM_DONE:  'llm-stream-done',
   TTS_AUDIO_CHUNK:  'tts-audio-chunk',
   STATE_TRANSITION: 'state-transition',
   SESSION_ERROR:    'session-error',

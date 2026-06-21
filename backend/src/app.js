@@ -5,13 +5,14 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const fs = require('fs').promises;
 
-const logger = require('../config/logger');
-const audioConfig = require('../config/audioConfig');
-const { LocalAudioStorage } = require('./services/storageService');
-const { MockSttService, WhisperSttService } = require('./services/audio/sttService');
-const { socketAuth } = require('./middleware/authMiddleware');
-const registerAudioHandlers = require('./sockets/audioSocket');
-const authRoutes = require('./routes/auth');
+const logger = require('@config/logger');
+const audioConfig = require('@config/audioConfig');
+const { LocalAudioStorage } = require('@services/storageService');
+const { MockSttService, WhisperSttService } = require('@services/audio/sttService');
+const { MockLlmService, OpenRouterLlmService } = require('@services/ai/llmService');
+const { socketAuth } = require('@middleware/authMiddleware');
+const registerAudioHandlers = require('@sockets/audioSocket');
+const authRoutes = require('@routes/auth');
 
 // ── Service instantiation (Dependency Injection) ────────────────────────────
 
@@ -26,6 +27,14 @@ const sttService =
         sampleRate: audioConfig.sampleRate,
         numChannels: audioConfig.numChannels,
         bitsPerSample: audioConfig.bitsPerSample,
+      });
+
+const llmService =
+  process.env.USE_MOCKS === 'true'
+    ? new MockLlmService()
+    : new OpenRouterLlmService({
+        apiKey: process.env.OPENROUTER_API_KEY,
+        model: process.env.LLM_MODEL,
       });
 
 // ── Express application ──────────────────────────────────────────────────────
@@ -70,7 +79,7 @@ io.on('connection', (socket) => {
     { socketId: socket.id, user: socket.user },
     'USER_CONNECTED (WebSocket Connection Established & Authenticated)'
   );
-  registerAudioHandlers(io, socket, logger, storageService, sttService);
+  registerAudioHandlers(io, socket, logger, storageService, sttService, llmService);
 });
 
 module.exports = { app, server };

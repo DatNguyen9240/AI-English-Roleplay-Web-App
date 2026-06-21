@@ -1,6 +1,11 @@
 import { io, Socket } from 'socket.io-client';
 import { SOCKET_EVENTS } from '../constants/socketEvents';
-import type { SttCompletedPayload, SessionErrorPayload } from '../../../types/audio';
+import type {
+  SttCompletedPayload,
+  LlmChunkPayload,
+  LlmStreamDonePayload,
+  SessionErrorPayload,
+} from '@/types/audio';
 
 interface StreamerOptions {
   onConnect?: () => void;
@@ -9,18 +14,20 @@ interface StreamerOptions {
 }
 
 /**
- * Map of typed server → client events.
- * Keys are derived from SOCKET_EVENTS constants via computed property syntax,
- * so renaming a constant here automatically narrows the type.
+ * Typed server → client event map.
+ * Keys are derived from SOCKET_EVENTS constants (as const) so renaming
+ * a constant automatically propagates the type change.
  */
 type ServerEvents = {
-  [SOCKET_EVENTS.STT_COMPLETED]: (payload: SttCompletedPayload) => void;
-  [SOCKET_EVENTS.SESSION_ERROR]: (payload: SessionErrorPayload) => void;
+  [SOCKET_EVENTS.STT_COMPLETED]:    (payload: SttCompletedPayload)    => void;
+  [SOCKET_EVENTS.LLM_STREAM_CHUNK]: (payload: LlmChunkPayload)        => void;
+  [SOCKET_EVENTS.LLM_STREAM_DONE]:  (payload: LlmStreamDonePayload)   => void;
+  [SOCKET_EVENTS.SESSION_ERROR]:    (payload: SessionErrorPayload)     => void;
 };
 
 /**
  * WebSocket streaming provider using Socket.IO.
- * Complies with Section 7.5: Swappable network interface pattern.
+ * Complies with README Section 7.5: Swappable network interface pattern.
  */
 export class SocketIOStreamer {
   private socket: Socket | null = null;

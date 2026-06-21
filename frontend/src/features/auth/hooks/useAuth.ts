@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { authApiClient } from '../../../services/authApiClient';
-import { logger } from '../../../utils/logger';
-import type { AuthState, AuthUser } from '../../../types/auth';
+import { authApiClient } from '@/services/authApiClient';
+import { logger } from '@/utils/logger';
+import type { AuthState, AuthUser } from '@/types/auth';
 
 const STORAGE_KEY = 'auth_user';
 

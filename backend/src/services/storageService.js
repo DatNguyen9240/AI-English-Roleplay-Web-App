@@ -1,6 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
-const { buildWavBuffer } = require('../utils/wavBuilder');
+const { buildWavBuffer } = require('@utils/wavBuilder');
 
 /**
  * Abstract class representing the Audio Storage Service interface.

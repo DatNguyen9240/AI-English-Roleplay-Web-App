@@ -1,4 +1,4 @@
-import type { AudioConfig } from '../../../types/audio';
+import type { AudioConfig } from '@/types/audio';
 
 /**
  * Voice Activity Detector using root-mean-square (RMS) energy analysis.

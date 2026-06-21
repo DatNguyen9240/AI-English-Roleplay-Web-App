@@ -1,29 +1,40 @@
 import React from 'react';
-import { TranscriptDisplay } from '../../conversation/components/TranscriptDisplay';
-import type { RecordingStatus } from '../../../types/audio';
+import { TranscriptDisplay } from '@/features/conversation/components/TranscriptDisplay';
+import { SubtitleDisplay } from '@/features/conversation/components/SubtitleDisplay';
+import type { RecordingStatus } from '@/types/audio';
 
 interface AudioDashboardProps {
   isRecording: boolean;
   status: RecordingStatus;
   rmsVolume: number;
   transcript: string;
+  llmText: string;
   startRecording: () => void;
   stopRecording: () => void;
 }
 
 /**
  * Primary audio recording console.
- * Displays mic state, volume visualizer, STT transcript, and control buttons.
+ * Phase 4: Now displays both user transcript (STT) and streaming AI response (LLM).
  */
 export function AudioDashboard({
   isRecording,
   status,
   rmsVolume,
   transcript,
+  llmText,
   startRecording,
   stopRecording,
 }: AudioDashboardProps): React.ReactElement {
   const volumePercentage = Math.min(100, Math.round(rmsVolume * 500));
+
+  const isDisabled = status === 'PROCESSING' || status === 'THINKING';
+
+  const startButtonLabel =
+    status === 'ERROR'      ? 'Retry' :
+    status === 'PROCESSING' ? 'Transcribing…' :
+    status === 'THINKING'   ? 'AI is responding…' :
+    'Start Recording';
 
   return (
     <div className="max-w-md w-full bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl flex flex-col items-center">
@@ -32,15 +43,16 @@ export function AudioDashboard({
         AI English Roleplay
       </h1>
       <p className="text-sm text-slate-400 text-center mb-8">
-        Phase 3: Speak into your mic — transcription powered by Whisper STT.
+        Phase 4: Full turn-taking — Whisper STT + LLM stream.
       </p>
 
       {/* FSM State Indicator */}
       <div className="flex flex-col items-center justify-center mb-8">
         <div className={`w-28 h-28 rounded-full flex items-center justify-center border-4 transition-all duration-300 ${
           status === 'LISTENING'   ? 'border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.3)] animate-pulse' :
-          status === 'PROCESSING' ? 'border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.3)] animate-pulse' :
-          status === 'ERROR'      ? 'border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.3)]' :
+          status === 'PROCESSING' ? 'border-amber-500  shadow-[0_0_20px_rgba(245,158,11,0.3)]  animate-pulse' :
+          status === 'THINKING'   ? 'border-teal-400   shadow-[0_0_20px_rgba(45,212,191,0.3)]  animate-pulse' :
+          status === 'ERROR'      ? 'border-rose-500   shadow-[0_0_20px_rgba(244,63,94,0.3)]' :
           'border-slate-800'
         }`}>
           <span className={`text-xs font-mono font-bold uppercase tracking-widest ${
@@ -67,9 +79,14 @@ export function AudioDashboard({
         </div>
       )}
 
-      {/* STT Transcript */}
-      <div className="w-full mb-6">
+      {/* User Transcript (STT) */}
+      <div className="w-full mb-4">
         <TranscriptDisplay status={status} transcript={transcript} />
+      </div>
+
+      {/* AI Response (LLM streaming) */}
+      <div className="w-full mb-6">
+        <SubtitleDisplay status={status} llmText={llmText} />
       </div>
 
       {/* Control Buttons */}
@@ -78,10 +95,10 @@ export function AudioDashboard({
           <button
             id="btn-start-recording"
             onClick={startRecording}
-            disabled={status === 'PROCESSING'}
+            disabled={isDisabled}
             className="flex-1 py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white transition-colors shadow-lg shadow-blue-500/10 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {status === 'ERROR' ? 'Retry' : status === 'PROCESSING' ? 'Transcribing...' : 'Start Recording'}
+            {startButtonLabel}
           </button>
         ) : (
           <button

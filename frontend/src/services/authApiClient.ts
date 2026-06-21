@@ -1,5 +1,5 @@
-import type { AuthUser } from '../types/auth';
-import { config } from '../config';
+import type { AuthUser } from '@/types/auth';
+import { config } from '@/config';
 
 const API_URL = config.apiUrl;
 

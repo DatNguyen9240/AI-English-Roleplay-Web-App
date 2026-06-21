@@ -1,15 +1,15 @@
 import React from 'react';
-import { useAudioRecorder } from './features/audio-core/hooks/useAudioRecorder';
-import { useAuth } from './features/auth/hooks/useAuth';
-import { AuthForm } from './features/auth/components/AuthForm';
-import { AudioDashboard } from './features/dashboard/components/AudioDashboard';
-import { PageShell } from './components/PageShell';
-import { config } from './config';
+import { useAudioRecorder } from '@/features/audio-core/hooks/useAudioRecorder';
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { AuthForm } from '@/features/auth/components/AuthForm';
+import { AudioDashboard } from '@/features/dashboard/components/AudioDashboard';
+import { PageShell } from '@/components/PageShell';
+import { config } from '@/config';
 import { LogOut, User, Sparkles } from 'lucide-react';
 
 function App(): React.ReactElement {
   const { user, logout } = useAuth();
-  const { isRecording, status, rmsVolume, transcript, startRecording, stopRecording } =
+  const { isRecording, status, rmsVolume, transcript, llmText, startRecording, stopRecording } =
     useAudioRecorder(config.apiUrl);
 
   if (!user) {
@@ -52,6 +52,7 @@ function App(): React.ReactElement {
         status={status}
         rmsVolume={rmsVolume}
         transcript={transcript}
+        llmText={llmText}
         startRecording={startRecording}
         stopRecording={stopRecording}
       />

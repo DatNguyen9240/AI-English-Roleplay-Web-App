@@ -1,4 +1,4 @@
-import type { AudioConfig } from '../../../types/audio';
+import type { AudioConfig } from '@/types/audio';
 
 /**
  * Audio format constants for the frontend capture pipeline.

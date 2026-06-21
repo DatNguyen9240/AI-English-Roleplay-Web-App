@@ -1,31 +1,37 @@
 const { SOCKET_EVENTS } = require('./socketEvents');
+const { TokenAggregator } = require('@services/ai/tokenAggregator');
 
-const sessionBuffers = new Map();
+// ── Session state ────────────────────────────────────────────────────────────
+// In-process Map — sufficient for single-instance deployments.
+// For horizontal scaling, replace with a shared store (e.g. Redis).
+const sessionMap = new Map();
 
 const SAVE_DEBUG_RECORDINGS = process.env.SAVE_DEBUG_RECORDINGS === 'true';
-
+const MAX_CONTEXT_MESSAGES = parseInt(process.env.MAX_CONTEXT_MESSAGES, 10);
 
 /**
- * Registers WebSocket handlers for audio capturing and STT transcription.
- * Complies with Section 7.5: Dependency Injection for all services.
+ * Registers WebSocket handlers for the full audio → STT → LLM turn-taking pipeline.
+ * Complies with README Section 7.5: Dependency Injection for all services.
  *
  * @param {import('socket.io').Server} io
  * @param {import('socket.io').Socket} socket
  * @param {import('pino').Logger} logger
- * @param {import('../services/storageService').AudioStorageService} storageService - WAV file storage (debug)
- * @param {import('../services/audio/sttService').SttService} sttService - Injected STT provider
+ * @param {import('../services/storageService').AudioStorageService} storageService
+ * @param {import('../services/audio/sttService').SttService} sttService
+ * @param {import('../services/ai/llmService').LlmService} llmService
  */
-function registerAudioHandlers(io, socket, logger, storageService, sttService) {
-  // Initialize session state for this socket
-  sessionBuffers.set(socket.id, {
+function registerAudioHandlers(io, socket, logger, storageService, sttService, llmService) {
+  // Initialize per-socket session state
+  sessionMap.set(socket.id, {
     buffers: [],
     lastSequence: -1,
-    startTime: null, // Set on first audio-chunk, not at connect time
+    startTime: null,
+    conversationHistory: [], // { role: 'user'|'assistant', content: string }[]
   });
 
   // ── Handle incoming audio chunk packets ─────────────────────────────────
   socket.on(SOCKET_EVENTS.AUDIO_CHUNK, (data) => {
-    const session = sessionBuffers.get(socket.id);
+    const session = sessionMap.get(socket.id);
     if (!session) {
       logger.warn({ socketId: socket.id }, 'Received audio-chunk but session state is missing');
       return;
@@ -34,25 +40,18 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService) {
     try {
       const { sequenceNumber, chunk } = data;
 
-      // Validate sequence ordering to detect packet loss or reordering
       if (sequenceNumber !== session.lastSequence + 1) {
         logger.warn(
-          {
-            socketId: socket.id,
-            expectedSeq: session.lastSequence + 1,
-            receivedSeq: sequenceNumber,
-          },
+          { socketId: socket.id, expectedSeq: session.lastSequence + 1, receivedSeq: sequenceNumber },
           'PACKET_DISORDER_DETECTED (Sequence Jump)'
         );
       }
       session.lastSequence = sequenceNumber;
 
-      // Mark speech start time on the very first chunk of a new utterance
       if (session.buffers.length === 0) {
         session.startTime = Date.now();
       }
 
-      // Normalize incoming chunk to a Node Buffer
       let audioBuffer;
       if (Buffer.isBuffer(chunk)) {
         audioBuffer = chunk;
@@ -63,7 +62,6 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService) {
       }
 
       session.buffers.push(audioBuffer);
-
       logger.debug(
         { socketId: socket.id, seq: sequenceNumber, bytes: audioBuffer.length },
         'AUDIO_CHUNK_RECEIVED'
@@ -73,18 +71,18 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService) {
     }
   });
 
-  // ── Handle end of speech event (VAD triggered silence) ──────────────────
+  // ── Handle end of speech — triggers STT → LLM pipeline ──────────────────
   socket.on(SOCKET_EVENTS.SPEECH_END, async () => {
-    const session = sessionBuffers.get(socket.id);
+    const session = sessionMap.get(socket.id);
     if (!session || session.buffers.length === 0) {
-      logger.warn({ socketId: socket.id }, 'Received speech-end but no buffered audio segments found');
+      logger.warn({ socketId: socket.id }, 'Received speech-end but no buffered audio found');
       return;
     }
 
     const sttStart = Date.now();
 
     try {
-      // Optionally persist a debug WAV file to disk for review
+      // ── Phase 3: STT ────────────────────────────────────────────────────
       if (SAVE_DEBUG_RECORDINGS) {
         const result = await storageService.saveWavRecording(socket.id, session.buffers);
         logger.info(
@@ -93,29 +91,66 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService) {
         );
       }
 
-      // Run transcription via the injected STT provider
       logger.info({ socketId: socket.id }, 'STT_STARTED');
       const transcript = await sttService.transcribe(session.buffers);
-      const latencyMs = Date.now() - sttStart;
+      const sttLatencyMs = Date.now() - sttStart;
 
       logger.info(
-        {
-          socketId: socket.id,
-          transcript,
-          latencyMs,
-          streamDurationSec: ((Date.now() - session.startTime) / 1000).toFixed(2),
-        },
+        { socketId: socket.id, transcript, sttLatencyMs },
         'STT_COMPLETED'
       );
 
-      // Deliver transcription result back to the originating client
-      socket.emit(SOCKET_EVENTS.STT_COMPLETED, { transcript, latencyMs });
+      socket.emit(SOCKET_EVENTS.STT_COMPLETED, { transcript, latencyMs: sttLatencyMs });
+
+      // Add user turn to conversation history
+      session.conversationHistory.push({ role: 'user', content: transcript });
+
+      // ── Phase 4: LLM ────────────────────────────────────────────────────
+      const llmStart = Date.now();
+      logger.info({ socketId: socket.id }, 'LLM_STARTED');
+
+      // Trim history to max context window (keeps most-recent turns)
+      const contextMessages = session.conversationHistory.slice(-MAX_CONTEXT_MESSAGES);
+
+      let fullResponse = '';
+
+      // TokenAggregator prepares sentence-level batches for TTS (Phase 5)
+      const aggregator = new TokenAggregator(
+        (sentence) => {
+          logger.debug({ socketId: socket.id, sentence }, 'LLM_SENTENCE_READY');
+          // TODO Phase 5: feed `sentence` into TTS service here
+        },
+        { tokenThreshold: 15 }
+      );
+
+      fullResponse = await llmService.generateStream(
+        contextMessages,
+        (token) => {
+          socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token });
+          aggregator.push(token);
+        }
+      );
+
+      aggregator.flush();
+
+      const llmLatencyMs = Date.now() - llmStart;
+      logger.info(
+        { socketId: socket.id, llmLatencyMs, responseLength: fullResponse.length },
+        'LLM_COMPLETED'
+      );
+
+      // Add assistant turn to history
+      if (fullResponse) {
+        session.conversationHistory.push({ role: 'assistant', content: fullResponse });
+      }
+
+      socket.emit(SOCKET_EVENTS.LLM_STREAM_DONE, { latencyMs: llmLatencyMs });
 
     } catch (err) {
-      logger.error({ socketId: socket.id, error: err.message }, 'STT_FAILED');
-      socket.emit(SOCKET_EVENTS.SESSION_ERROR, { message: 'Transcription failed. Please try again.' });
+      logger.error({ socketId: socket.id, error: err.message }, 'PIPELINE_FAILED');
+      socket.emit(SOCKET_EVENTS.SESSION_ERROR, { message: 'Something went wrong. Please try again.' });
     } finally {
-      // Always reset session memory after a speech turn
+      // Reset audio buffers — keep conversationHistory for multi-turn conversation
       session.buffers = [];
       session.lastSequence = -1;
       session.startTime = null;
@@ -125,7 +160,7 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService) {
   // ── Connection cleanup ───────────────────────────────────────────────────
   socket.on('disconnect', (reason) => {
     logger.info({ socketId: socket.id, reason }, 'USER_DISCONNECTED');
-    sessionBuffers.delete(socket.id);
+    sessionMap.delete(socket.id);
   });
 }
 
