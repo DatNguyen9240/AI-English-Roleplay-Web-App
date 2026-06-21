@@ -6,6 +6,16 @@ const logger = require('@config/logger');
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN;
 const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10);
+
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is missing.');
+}
+if (!JWT_EXPIRES_IN) {
+  throw new Error('JWT_EXPIRES_IN environment variable is missing.');
+}
+if (isNaN(BCRYPT_SALT_ROUNDS)) {
+  throw new Error('BCRYPT_SALT_ROUNDS environment variable is missing or invalid.');
+}
 const prisma = new PrismaClient();
 
 /**

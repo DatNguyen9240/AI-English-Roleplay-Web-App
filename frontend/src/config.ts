@@ -5,18 +5,34 @@
  * immediately on startup rather than causing a cryptic runtime failure.
  */
 
-function requireEnv(key: string): string {
-  const value = import.meta.env[key] as string | undefined;
-  if (!value) {
-    throw new Error(
-      `[config] Missing required environment variable: ${key}. ` +
-      'Check that frontend/.env.local is present and the dev server has been restarted.'
-    );
+function getApiUrl(): string {
+  const envValue = import.meta.env.VITE_API_URL as string | undefined;
+  
+  // If we are in a browser environment, we can dynamically determine the API URL.
+  if (typeof window !== 'undefined') {
+    const isLocalhostPage = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    // Case 1: VITE_API_URL is missing or empty. Fallback to current origin.
+    if (!envValue || envValue.trim() === '') {
+      return window.location.origin;
+    }
+    
+    // Case 2: Page is loaded from a remote host (non-localhost), but VITE_API_URL points to localhost.
+    // This is a common issue when production builds default to localhost. Override with the remote origin
+    // to route requests through the Nginx reverse proxy.
+    const pointsToLocalhost = envValue.includes('localhost') || envValue.includes('127.0.0.1');
+    if (!isLocalhostPage && pointsToLocalhost) {
+      return window.location.origin;
+    }
+    
+    return envValue;
   }
-  return value;
+  
+  // Fallback for non-browser environments (e.g. testing)
+  return envValue || 'http://localhost:5000';
 }
 
 export const config = {
   /** Base URL for all HTTP + WebSocket backend calls (e.g. http://localhost:5000) */
-  apiUrl: requireEnv('VITE_API_URL'),
+  apiUrl: getApiUrl(),
 } as const;

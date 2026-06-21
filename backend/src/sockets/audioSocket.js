@@ -9,7 +9,6 @@ const sessionManager = new SessionManager(configLogger);
 
 const SAVE_DEBUG_RECORDINGS = process.env.SAVE_DEBUG_RECORDINGS === 'true';
 const MAX_CONTEXT_MESSAGES = parseInt(process.env.MAX_CONTEXT_MESSAGES, 10);
-
 if (isNaN(MAX_CONTEXT_MESSAGES)) {
   throw new Error('MAX_CONTEXT_MESSAGES environment variable is missing or invalid.');
 }
@@ -23,6 +22,7 @@ const TTS_TOKEN_THRESHOLD = parseInt(process.env.TTS_TOKEN_THRESHOLD, 10);
 if (isNaN(TTS_TOKEN_THRESHOLD)) {
   throw new Error('TTS_TOKEN_THRESHOLD environment variable is missing or invalid.');
 }
+
 
 // Start periodic cleanup of idle sessions (runs every 60 seconds)
 setInterval(() => {

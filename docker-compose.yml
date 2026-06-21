@@ -27,7 +27,14 @@ services:
     environment:
       - PORT=5000
       - DATABASE_URL=postgresql://postgres:password123@db:5432/ai_roleplay?schema=public
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV:-development}
+      - JWT_SECRET=${JWT_SECRET:-replace_with_a_long_random_secret_in_prod}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
+      - BCRYPT_SALT_ROUNDS=${BCRYPT_SALT_ROUNDS:-10}
+      - MAX_CONTEXT_MESSAGES=${MAX_CONTEXT_MESSAGES:-10}
+      - SESSION_TIMEOUT=${SESSION_TIMEOUT:-180000}
+      - TTS_TOKEN_THRESHOLD=${TTS_TOKEN_THRESHOLD:-15}
+      - USE_MOCKS=${USE_MOCKS:-true}
     depends_on:
       - db
     networks:

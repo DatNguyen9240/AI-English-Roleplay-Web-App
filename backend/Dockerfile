@@ -19,4 +19,10 @@ COPY backend/ ./backend/
 EXPOSE 5000
 
 WORKDIR /usr/src/app/backend
-CMD [ "npm", "start" ]
+
+# Generate Prisma Client at build time
+RUN npx prisma generate
+
+# Run database push and seed on container startup, then start server
+CMD [ "sh", "-c", "npx prisma db push && npx prisma db seed && npm start" ]
+

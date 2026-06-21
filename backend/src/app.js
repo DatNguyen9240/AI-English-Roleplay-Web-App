@@ -19,8 +19,10 @@ const authRoutes = require('@routes/auth');
 
 const storageService = new LocalAudioStorage(audioConfig);
 
+const useMocks = process.env.USE_MOCKS !== 'false';
+
 const sttService =
-  process.env.USE_MOCKS === 'true'
+  useMocks
     ? new MockSttService()
     : new WhisperSttService({
         binaryPath: process.env.WHISPER_BINARY_PATH,
@@ -31,7 +33,7 @@ const sttService =
       });
 
 const llmService =
-  process.env.USE_MOCKS === 'true'
+  useMocks
     ? new MockLlmService()
     : new OpenRouterLlmService({
         apiKey: process.env.OPENROUTER_API_KEY,
@@ -39,7 +41,7 @@ const llmService =
       });
 
 const ttsService =
-  process.env.USE_MOCKS === 'true'
+  useMocks
     ? new MockTtsService()
     : new OpenAiTtsService({
         apiKey: process.env.OPENAI_API_KEY,
@@ -51,7 +53,24 @@ const ttsService =
 
 const app = express();
 
-app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
+// Setup CORS configurations
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
+  : [];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // If FRONTEND_URL is not set, or request has no origin (like curl), or matches allowedOrigins, or not in prod
+    if (!origin || allowedOrigins.length === 0 || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 
@@ -76,7 +95,13 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.length === 0 || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ['GET', 'POST'],
     credentials: true,
   },
