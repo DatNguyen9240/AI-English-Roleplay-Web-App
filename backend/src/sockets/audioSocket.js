@@ -20,7 +20,7 @@ const MAX_CONTEXT_MESSAGES = parseInt(process.env.MAX_CONTEXT_MESSAGES, 10);
  * @param {import('../services/audio/sttService').SttService} sttService
  * @param {import('../services/ai/llmService').LlmService} llmService
  */
-function registerAudioHandlers(io, socket, logger, storageService, sttService, llmService) {
+function registerAudioHandlers(io, socket, logger, storageService, sttService, llmService, ttsService) {
   // Initialize per-socket session state
   sessionMap.set(socket.id, {
     buffers: [],
@@ -114,11 +114,27 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
 
       let fullResponse = '';
 
+      const requestId = `${socket.id}-${Date.now()}`;
+      let sentenceSeq = 0;
+
       // TokenAggregator prepares sentence-level batches for TTS (Phase 5)
       const aggregator = new TokenAggregator(
-        (sentence) => {
-          logger.debug({ socketId: socket.id, sentence }, 'LLM_SENTENCE_READY');
-          // TODO Phase 5: feed `sentence` into TTS service here
+        async (sentence) => {
+          const currentSeq = sentenceSeq++;
+          logger.info({ socketId: socket.id, sentence, seq: currentSeq }, 'LLM_SENTENCE_READY, STARTING TTS');
+          try {
+            const { audio, sampleRate, words } = await ttsService.synthesize(sentence, requestId);
+            logger.info({ socketId: socket.id, seq: currentSeq }, 'TTS_SYNTHESIS_COMPLETE');
+            socket.emit(SOCKET_EVENTS.TTS_AUDIO_CHUNK, {
+              requestId,
+              sequenceNumber: currentSeq,
+              audio,
+              sampleRate,
+              words,
+            });
+          } catch (err) {
+            logger.error({ socketId: socket.id, seq: currentSeq, error: err.message }, 'TTS_SYNTHESIS_FAILED');
+          }
         },
         { tokenThreshold: 15 }
       );

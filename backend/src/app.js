@@ -10,6 +10,7 @@ const audioConfig = require('@config/audioConfig');
 const { LocalAudioStorage } = require('@services/storageService');
 const { MockSttService, WhisperSttService } = require('@services/audio/sttService');
 const { MockLlmService, OpenRouterLlmService } = require('@services/ai/llmService');
+const { MockTtsService, OpenAiTtsService } = require('@services/audio/ttsService');
 const { socketAuth } = require('@middleware/authMiddleware');
 const registerAudioHandlers = require('@sockets/audioSocket');
 const authRoutes = require('@routes/auth');
@@ -35,6 +36,15 @@ const llmService =
     : new OpenRouterLlmService({
         apiKey: process.env.OPENROUTER_API_KEY,
         model: process.env.LLM_MODEL,
+      });
+
+const ttsService =
+  process.env.USE_MOCKS === 'true'
+    ? new MockTtsService()
+    : new OpenAiTtsService({
+        apiKey: process.env.OPENAI_API_KEY,
+        model: process.env.TTS_MODEL,
+        voice: process.env.TTS_VOICE,
       });
 
 // ── Express application ──────────────────────────────────────────────────────
@@ -79,7 +89,7 @@ io.on('connection', (socket) => {
     { socketId: socket.id, user: socket.user },
     'USER_CONNECTED (WebSocket Connection Established & Authenticated)'
   );
-  registerAudioHandlers(io, socket, logger, storageService, sttService, llmService);
+  registerAudioHandlers(io, socket, logger, storageService, sttService, llmService, ttsService);
 });
 
 module.exports = { app, server };

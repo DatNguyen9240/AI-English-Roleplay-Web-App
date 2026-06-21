@@ -4,6 +4,7 @@ import { audioConfig } from '../config/audioConfig';
 import { EnergyVadProcessor } from '../services/EnergyVadProcessor';
 import { SocketIOStreamer } from '../services/SocketIOStreamer';
 import { SOCKET_EVENTS } from '../constants/socketEvents';
+import { PlaybackQueueManager } from '../queue/PlaybackQueueManager';
 import { logger } from '@/utils/logger';
 import type { RecordingStatus } from '@/types/audio';
 
@@ -18,6 +19,8 @@ export interface UseAudioRecorderReturn {
   rmsVolume: number;
   transcript: string;
   llmText: string;
+  currentPlayingSentence: string;
+  highlightedWordIndex: number;
   startRecording: () => Promise<void>;
   stopRecording: () => void;
 }
@@ -38,6 +41,8 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [rmsVolume, setRmsVolume] = useState(0);
   const [transcript, setTranscript] = useState('');
   const [llmText, setLlmText] = useState('');
+  const [currentPlayingSentence, setCurrentPlayingSentence] = useState('');
+  const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
 
   // Services — lazily initialized once per mount
   const streamerRef = useRef<SocketIOStreamer | null>(null);
@@ -50,6 +55,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const audioInputRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const playoutQueueRef = useRef<PlaybackQueueManager | null>(null);
 
   // Audio accumulation
   const audioBufferQueueRef = useRef<number[]>([]);
@@ -81,11 +87,8 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
       mediaStreamRef.current = null;
     }
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-
+    // Keep audioContextRef.current alive for playout queue.
+    
     audioBufferQueueRef.current = [];
     sequenceNumberRef.current = 0;
     lastVolumeUpdateRef.current = 0;
@@ -114,6 +117,14 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     stopAudioRef.current();
     streamerRef.current?.sendSpeechEnd();
     streamerRef.current?.disconnect();
+    
+    // Close AudioContext and stop playout queue on unmount
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    playoutQueueRef.current?.stop();
+    playoutQueueRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -126,6 +137,12 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setStatus('LISTENING');
     setTranscript('');
     setLlmText('');
+    setCurrentPlayingSentence('');
+    setHighlightedWordIndex(-1);
+    
+    // Reset playout queue for the new turn
+    playoutQueueRef.current?.stop();
+
     sequenceNumberRef.current = 0;
     audioBufferQueueRef.current = [];
     vadProcessorRef.current?.reset();
@@ -165,12 +182,26 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         setLlmText((prev) => prev + token);
       });
 
-      // ── LLM stream done → return to IDLE ────────────────────────────────
+      // ── LLM stream done ──────────────────────────────────────────────────
       streamerRef.current!.on(SOCKET_EVENTS.LLM_STREAM_DONE, ({ latencyMs }) => {
         clearTimeout(llmTimeoutRef.current ?? undefined);
         logger.log(`[LLM] Stream done in ${latencyMs}ms`);
-        setStatus('IDLE');
-        streamerRef.current?.disconnect();
+        // Note: Do not disconnect socket immediately here because we need it to continue
+        // receiving tts-audio-chunk packets. Playout manager will notify when finished.
+      });
+
+      // ── TTS audio chunk → playout ─────────────────────────────────────────
+      streamerRef.current!.on(SOCKET_EVENTS.TTS_AUDIO_CHUNK, (data) => {
+        logger.log(`[TTS] Received chunk sequence: ${data.sequenceNumber}`);
+        if (playoutQueueRef.current) {
+          playoutQueueRef.current.enqueue({
+            requestId: data.requestId,
+            sequenceNumber: data.sequenceNumber,
+            audio: data.audio,
+            sampleRate: data.sampleRate,
+            words: data.words,
+          });
+        }
       });
 
       // ── Error handler ────────────────────────────────────────────────────
@@ -180,6 +211,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         logger.error('[Socket] Session error:', message);
         setStatus('ERROR');
         streamerRef.current?.disconnect();
+        playoutQueueRef.current?.stop();
       });
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -191,10 +223,33 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       });
       mediaStreamRef.current = stream;
 
-      const audioContext = new window.AudioContext();
-      audioContextRef.current = audioContext;
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        audioContextRef.current = new window.AudioContext();
+      }
+      const audioContext = audioContextRef.current;
       if (audioContext.state === 'suspended') {
         await audioContext.resume();
+      }
+
+      // Initialize Playout Queue Manager if not already
+      if (!playoutQueueRef.current) {
+        const queue = new PlaybackQueueManager(audioContext);
+        queue.onSentenceStart = (sentenceText) => {
+          setCurrentPlayingSentence(sentenceText);
+          setHighlightedWordIndex(-1);
+          setStatus('SPEAKING');
+        };
+        queue.onWordSpoken = (_wordText, index) => {
+          setHighlightedWordIndex(index);
+        };
+        queue.onQueueEmpty = () => {
+          logger.log('[useAudioRecorder] Playout queue empty. Turn complete, going IDLE');
+          setStatus('IDLE');
+          setCurrentPlayingSentence('');
+          setHighlightedWordIndex(-1);
+          streamerRef.current?.disconnect();
+        };
+        playoutQueueRef.current = queue;
       }
 
       await audioContext.audioWorklet.addModule(WORKLET_MODULE_URL);
@@ -241,5 +296,15 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     }
   }, [socketUrl]);
 
-  return { isRecording, status, rmsVolume, transcript, llmText, startRecording, stopRecording };
+  return {
+    isRecording,
+    status,
+    rmsVolume,
+    transcript,
+    llmText,
+    currentPlayingSentence,
+    highlightedWordIndex,
+    startRecording,
+    stopRecording,
+  };
 }

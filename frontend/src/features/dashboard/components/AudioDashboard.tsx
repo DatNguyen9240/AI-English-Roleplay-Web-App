@@ -9,6 +9,8 @@ interface AudioDashboardProps {
   rmsVolume: number;
   transcript: string;
   llmText: string;
+  currentPlayingSentence?: string;
+  highlightedWordIndex?: number;
   startRecording: () => void;
   stopRecording: () => void;
 }
@@ -23,17 +25,20 @@ export function AudioDashboard({
   rmsVolume,
   transcript,
   llmText,
+  currentPlayingSentence,
+  highlightedWordIndex,
   startRecording,
   stopRecording,
 }: AudioDashboardProps): React.ReactElement {
   const volumePercentage = Math.min(100, Math.round(rmsVolume * 500));
 
-  const isDisabled = status === 'PROCESSING' || status === 'THINKING';
+  const isDisabled = status === 'PROCESSING' || status === 'THINKING' || status === 'SPEAKING';
 
   const startButtonLabel =
     status === 'ERROR'      ? 'Retry' :
     status === 'PROCESSING' ? 'Transcribing…' :
     status === 'THINKING'   ? 'AI is responding…' :
+    status === 'SPEAKING'   ? 'AI is speaking…' :
     'Start Recording';
 
   return (
@@ -52,6 +57,7 @@ export function AudioDashboard({
           status === 'LISTENING'   ? 'border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.3)] animate-pulse' :
           status === 'PROCESSING' ? 'border-amber-500  shadow-[0_0_20px_rgba(245,158,11,0.3)]  animate-pulse' :
           status === 'THINKING'   ? 'border-teal-400   shadow-[0_0_20px_rgba(45,212,191,0.3)]  animate-pulse' :
+          status === 'SPEAKING'   ? 'border-violet-500 shadow-[0_0_25px_rgba(139,92,246,0.5)] animate-pulse' :
           status === 'ERROR'      ? 'border-rose-500   shadow-[0_0_20px_rgba(244,63,94,0.3)]' :
           'border-slate-800'
         }`}>
@@ -86,7 +92,12 @@ export function AudioDashboard({
 
       {/* AI Response (LLM streaming) */}
       <div className="w-full mb-6">
-        <SubtitleDisplay status={status} llmText={llmText} />
+        <SubtitleDisplay
+          status={status}
+          llmText={llmText}
+          currentPlayingSentence={currentPlayingSentence}
+          highlightedWordIndex={highlightedWordIndex}
+        />
       </div>
 
       {/* Control Buttons */}

@@ -10,7 +10,7 @@
  *   THINKING    → STT complete, LLM is streaming response tokens
  *   ERROR       → recoverable error, shows retry UI
  */
-export type RecordingStatus = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'THINKING' | 'ERROR';
+export type RecordingStatus = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'THINKING' | 'SPEAKING' | 'ERROR';
 
 /** Audio processing configuration */
 export interface AudioConfig {
@@ -42,3 +42,17 @@ export interface LlmStreamDonePayload {
 export interface SessionErrorPayload {
   message: string;
 }
+
+/** Payload emitted by server on 'tts-audio-chunk' event */
+export interface TtsAudioChunkPayload {
+  requestId: string;
+  sequenceNumber: number;
+  audio: ArrayBuffer;
+  sampleRate: number;
+  words: Array<{
+    text: string;
+    startMs: number;
+    endMs: number;
+  }>;
+}
+

@@ -538,14 +538,14 @@ Phase 3: Backend STT Integration (Whisper) ✅ COMPLETE
 ├── ✅ Pipe incoming socket buffers into Whisper inference process
 └── ✅ Emit 'stt-completed' to client → TranscriptDisplay component
 
-Phase 4: LLM Stream & Token Aggregator
-├── Connect OpenRouter / DeepSeek API stream
-└── Build Token Aggregator boundary parser (regex punctuation)
+Phase 4: LLM Stream & Token Aggregator ✅ COMPLETE
+├── ✅ Connect OpenRouter / DeepSeek API stream
+└── ✅ Build Token Aggregator boundary parser (regex punctuation)
 
-Phase 5: Streaming TTS & Playout Queue
-├── Build hybrid TTS connector (OpenAI/Piper)
-├── Stream audio chunks to Client
-└── Write Playback Queue Manager on Client (sequenced ordered playout)
+Phase 5: Streaming TTS & Playout Queue ✅ COMPLETE
+├── ✅ Build hybrid TTS connector (OpenAI/Piper)
+├── ✅ Stream audio chunks to Client
+└── ✅ Write Playback Queue Manager on Client (sequenced ordered playout)
 
 Phase 6: Turn-Taking & Interruption loop
 ├── Implement client interruption trigger (mic activity while speaking)

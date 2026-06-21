@@ -5,6 +5,7 @@ import type {
   LlmChunkPayload,
   LlmStreamDonePayload,
   SessionErrorPayload,
+  TtsAudioChunkPayload,
 } from '@/types/audio';
 
 interface StreamerOptions {
@@ -22,6 +23,7 @@ type ServerEvents = {
   [SOCKET_EVENTS.STT_COMPLETED]:    (payload: SttCompletedPayload)    => void;
   [SOCKET_EVENTS.LLM_STREAM_CHUNK]: (payload: LlmChunkPayload)        => void;
   [SOCKET_EVENTS.LLM_STREAM_DONE]:  (payload: LlmStreamDonePayload)   => void;
+  [SOCKET_EVENTS.TTS_AUDIO_CHUNK]:  (payload: TtsAudioChunkPayload)   => void;
   [SOCKET_EVENTS.SESSION_ERROR]:    (payload: SessionErrorPayload)     => void;
 };
 

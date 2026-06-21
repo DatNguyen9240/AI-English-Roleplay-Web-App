@@ -4,15 +4,23 @@ import type { RecordingStatus } from '@/types/audio';
 interface SubtitleDisplayProps {
   llmText: string;
   status: RecordingStatus;
+  currentPlayingSentence?: string;
+  highlightedWordIndex?: number;
 }
 
 /**
  * Displays the AI's streamed response text in real-time.
  * - THINKING: shows tokens as they stream in with a blinking cursor
+ * - SPEAKING: shows the current sentence with highlighted spoken word (karaoke style)
  * - IDLE (with text): shows completed response, fades in
  * - Other states: shows nothing
  */
-export function SubtitleDisplay({ llmText, status }: SubtitleDisplayProps): React.ReactElement | null {
+export function SubtitleDisplay({
+  llmText,
+  status,
+  currentPlayingSentence,
+  highlightedWordIndex,
+}: SubtitleDisplayProps): React.ReactElement | null {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll as new tokens arrive
@@ -20,12 +28,13 @@ export function SubtitleDisplay({ llmText, status }: SubtitleDisplayProps): Reac
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [llmText]);
+  }, [llmText, currentPlayingSentence]);
 
   const isThinking = status === 'THINKING';
-  const hasContent = llmText.trim().length > 0;
+  const isSpeaking = status === 'SPEAKING';
+  const hasContent = (isSpeaking && currentPlayingSentence) || llmText.trim().length > 0;
 
-  if (!isThinking && !hasContent) return null;
+  if (!isThinking && !hasContent && !isSpeaking) return null;
 
   return (
     <div
@@ -55,6 +64,12 @@ export function SubtitleDisplay({ llmText, status }: SubtitleDisplayProps): Reac
             ))}
           </span>
         )}
+        {isSpeaking && (
+          <span className="flex items-center ml-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <span className="text-[10px] text-emerald-400 font-mono ml-1.5 uppercase tracking-wider font-bold">Speaking</span>
+          </span>
+        )}
       </div>
 
       {/* Text area */}
@@ -62,12 +77,32 @@ export function SubtitleDisplay({ llmText, status }: SubtitleDisplayProps): Reac
         ref={scrollRef}
         className="bg-slate-900/60 border border-emerald-500/20 rounded-xl px-4 py-3 max-h-36 overflow-y-auto shadow-inner"
       >
-        <p className="text-slate-200 text-sm leading-relaxed font-light whitespace-pre-wrap">
-          {llmText}
-          {isThinking && (
-            <span className="inline-block w-0.5 h-3.5 bg-emerald-400 ml-0.5 align-middle animate-pulse" />
-          )}
-        </p>
+        {isSpeaking && currentPlayingSentence ? (
+          <p className="text-slate-200 text-sm leading-relaxed font-light whitespace-pre-wrap flex flex-wrap gap-x-1.5 gap-y-1">
+            {currentPlayingSentence.split(/\s+/).map((word, idx) => {
+              const isHighlighted = idx === highlightedWordIndex;
+              return (
+                <span
+                  key={idx}
+                  className={`inline-block transition-all duration-150 rounded ${
+                    isHighlighted
+                      ? 'text-emerald-300 font-semibold bg-emerald-500/20 px-1 scale-105 shadow-sm shadow-emerald-500/10'
+                      : 'text-slate-400'
+                  }`}
+                >
+                  {word}
+                </span>
+              );
+            })}
+          </p>
+        ) : (
+          <p className="text-slate-200 text-sm leading-relaxed font-light whitespace-pre-wrap">
+            {llmText}
+            {isThinking && (
+              <span className="inline-block w-0.5 h-3.5 bg-emerald-400 ml-0.5 align-middle animate-pulse" />
+            )}
+          </p>
+        )}
       </div>
     </div>
   );

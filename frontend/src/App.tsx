@@ -9,8 +9,17 @@ import { LogOut, User, Sparkles } from 'lucide-react';
 
 function App(): React.ReactElement {
   const { user, logout } = useAuth();
-  const { isRecording, status, rmsVolume, transcript, llmText, startRecording, stopRecording } =
-    useAudioRecorder(config.apiUrl);
+  const {
+    isRecording,
+    status,
+    rmsVolume,
+    transcript,
+    llmText,
+    currentPlayingSentence,
+    highlightedWordIndex,
+    startRecording,
+    stopRecording,
+  } = useAudioRecorder(config.apiUrl);
 
   if (!user) {
     return (
@@ -53,6 +62,8 @@ function App(): React.ReactElement {
         rmsVolume={rmsVolume}
         transcript={transcript}
         llmText={llmText}
+        currentPlayingSentence={currentPlayingSentence}
+        highlightedWordIndex={highlightedWordIndex}
         startRecording={startRecording}
         stopRecording={stopRecording}
       />
