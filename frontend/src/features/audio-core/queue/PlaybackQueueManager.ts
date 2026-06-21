@@ -155,6 +155,7 @@ export class PlaybackQueueManager {
         const sentenceDelayMs = Math.max(0, (scheduledTime - currentTime) * 1000);
         const sentenceTimeout = setTimeout(() => {
           this.activeTimeouts.delete(sentenceTimeout);
+          logger.log(`[Playout] AUDIO_PLAYBACK_STARTED (requestId: ${chunk.requestId})`);
           if (this.onSentenceStart) {
             this.onSentenceStart(sentenceText, chunk.requestId);
           }

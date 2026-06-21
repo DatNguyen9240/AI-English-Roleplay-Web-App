@@ -55,7 +55,7 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
   socket.on(SOCKET_EVENTS.AUDIO_CHUNK, (data) => {
     const session = sessionManager.getSession(socket.id);
     if (!session) {
-      logger.warn({ socketId: socket.id }, 'Received audio-chunk but session state is missing');
+      logger.warn({ sessionId: socket.id }, 'Received audio-chunk but session state is missing');
       return;
     }
 
@@ -68,7 +68,7 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       // Enforce FSM state: discard chunks if not in LISTENING state (abuse/jitter protection)
       if (session.fsm.state !== STATES.LISTENING) {
         logger.debug(
-          { socketId: socket.id, state: session.fsm.state },
+          { sessionId: socket.id, state: session.fsm.state, requestId: session.currentRequestId || '' },
           'AUDIO_CHUNK_DISCARDED: Session not in LISTENING state'
         );
         return;
@@ -78,7 +78,7 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
 
       if (sequenceNumber !== session.lastSequence + 1) {
         logger.warn(
-          { socketId: socket.id, expectedSeq: session.lastSequence + 1, receivedSeq: sequenceNumber },
+          { sessionId: socket.id, expectedSeq: session.lastSequence + 1, receivedSeq: sequenceNumber, requestId: session.currentRequestId || '' },
           'PACKET_DISORDER_DETECTED (Sequence Jump)'
         );
       }
@@ -86,6 +86,11 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
 
       if (session.buffers.length === 0) {
         session.startTime = Date.now();
+        session.currentRequestId = `req-${socket.id}-${Date.now()}`;
+        logger.info(
+          { sessionId: socket.id, requestId: session.currentRequestId },
+          'USER_STARTED_SPEAKING'
+        );
       }
 
       let audioBuffer;
@@ -99,11 +104,11 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
 
       session.buffers.push(audioBuffer);
       logger.debug(
-        { socketId: socket.id, seq: sequenceNumber, bytes: audioBuffer.length },
+        { sessionId: socket.id, seq: sequenceNumber, bytes: audioBuffer.length, requestId: session.currentRequestId || '' },
         'AUDIO_CHUNK_RECEIVED'
       );
     } catch (err) {
-      logger.error({ socketId: socket.id, error: err.message }, 'Failed to process audio chunk');
+      logger.error({ sessionId: socket.id, error: err.message, requestId: session.currentRequestId || '' }, 'Failed to process audio chunk');
     }
   });
 
@@ -111,8 +116,13 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
   socket.on(SOCKET_EVENTS.SPEECH_END, async () => {
     const session = sessionManager.getSession(socket.id);
     if (!session || session.buffers.length === 0) {
-      logger.warn({ socketId: socket.id }, 'Received speech-end but no buffered audio found');
+      logger.warn({ sessionId: socket.id }, 'Received speech-end but no buffered audio found');
       return;
+    }
+
+    const requestId = session.currentRequestId || `req-${socket.id}-${Date.now()}`;
+    if (!session.currentRequestId) {
+      session.currentRequestId = requestId;
     }
 
     // Transition to processing state
@@ -122,6 +132,11 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       return; // Invalid transition, ignore
     }
 
+    logger.info(
+      { sessionId: socket.id, requestId },
+      'VAD_DETECTED_SILENCE'
+    );
+
     const sttStart = Date.now();
 
     try {
@@ -129,17 +144,17 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       if (SAVE_DEBUG_RECORDINGS) {
         const result = await storageService.saveWavRecording(socket.id, session.buffers);
         logger.info(
-          { socketId: socket.id, fileName: result.fileName, totalBytes: result.totalBytes },
+          { sessionId: socket.id, requestId, fileName: result.fileName, totalBytes: result.totalBytes },
           'DEBUG_WAV_SAVED'
         );
       }
 
-      logger.info({ socketId: socket.id }, 'STT_STARTED');
+      logger.info({ sessionId: socket.id, requestId }, 'STT_STARTED');
       const transcript = await sttService.transcribe(session.buffers);
       const sttLatencyMs = Date.now() - sttStart;
 
       logger.info(
-        { socketId: socket.id, transcript, sttLatencyMs },
+        { sessionId: socket.id, requestId, transcript, sttLatencyMs },
         'STT_COMPLETED'
       );
 
@@ -153,7 +168,7 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
 
       // ── Phase 4: LLM ────────────────────────────────────────────────────
       const llmStart = Date.now();
-      logger.info({ socketId: socket.id }, 'LLM_STARTED');
+      logger.info({ sessionId: socket.id, requestId }, 'LLM_STARTED');
 
       // Create a fresh AbortSignal linked to LLM and TTS tasks for this turn
       const signal = session.createAbortSignal();
@@ -162,14 +177,17 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       const contextMessages = session.conversationHistory.slice(-MAX_CONTEXT_MESSAGES);
 
       let fullResponse = '';
-      const requestId = `${socket.id}-${Date.now()}`;
       let sentenceSeq = 0;
 
       // TokenAggregator prepares sentence-level batches for TTS (Phase 5)
       const aggregator = new TokenAggregator(
         async (sentence) => {
           const currentSeq = sentenceSeq++;
-          logger.info({ socketId: socket.id, sentence, seq: currentSeq }, 'LLM_SENTENCE_READY, STARTING TTS');
+          const ttsStart = Date.now();
+          logger.info(
+            { sessionId: socket.id, requestId, seq: currentSeq, sentence },
+            'TTS_STARTED'
+          );
           try {
             const { audio, sampleRate, words } = await ttsService.synthesize(sentence, requestId, signal);
             
@@ -178,7 +196,11 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
               session.fsm.transition(STATES.SPEAKING);
             }
 
-            logger.info({ socketId: socket.id, seq: currentSeq }, 'TTS_SYNTHESIS_COMPLETE');
+            const ttsLatencyMs = Date.now() - ttsStart;
+            logger.info(
+              { sessionId: socket.id, requestId, seq: currentSeq, ttsLatencyMs },
+              'TTS_COMPLETED'
+            );
             socket.emit(SOCKET_EVENTS.TTS_AUDIO_CHUNK, {
               requestId,
               sequenceNumber: currentSeq,
@@ -188,19 +210,35 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
             });
           } catch (err) {
             if (err.name === 'AbortError' || signal.aborted) {
-              logger.info({ socketId: socket.id, seq: currentSeq }, 'TTS synthesis aborted.');
+              logger.info(
+                { sessionId: socket.id, requestId, seq: currentSeq },
+                'TTS synthesis aborted.'
+              );
               return;
             }
-            logger.error({ socketId: socket.id, seq: currentSeq, error: err.message }, 'TTS_SYNTHESIS_FAILED');
+            logger.error(
+              { sessionId: socket.id, requestId, seq: currentSeq, error: err.message },
+              'TTS_SYNTHESIS_FAILED'
+            );
           }
         },
         { tokenThreshold: TTS_TOKEN_THRESHOLD }
       );
 
+      let llmFirstTokenReceived = false;
+
       fullResponse = await llmService.generateStream(
         contextMessages,
         (token) => {
           if (signal.aborted) return;
+          if (!llmFirstTokenReceived) {
+            llmFirstTokenReceived = true;
+            const firstTokenLatencyMs = Date.now() - llmStart;
+            logger.info(
+              { sessionId: socket.id, requestId, llmLatencyMs: firstTokenLatencyMs },
+              'LLM_RESPONSE_RECEIVED'
+            );
+          }
           socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token });
           aggregator.push(token);
         },
@@ -211,7 +249,7 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
 
       const llmLatencyMs = Date.now() - llmStart;
       logger.info(
-        { socketId: socket.id, llmLatencyMs, responseLength: fullResponse.length },
+        { sessionId: socket.id, requestId, llmLatencyMs, responseLength: fullResponse.length },
         'LLM_COMPLETED'
       );
 
@@ -226,10 +264,16 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
 
     } catch (err) {
       if (err.name === 'AbortError' || session.abortController?.signal.aborted) {
-        logger.info({ socketId: socket.id }, 'Generation task aborted successfully.');
+        logger.info(
+          { sessionId: socket.id, requestId },
+          'Generation task aborted successfully.'
+        );
         return;
       }
-      logger.error({ socketId: socket.id, error: err.message }, 'PIPELINE_FAILED');
+      logger.error(
+        { sessionId: socket.id, requestId, error: err.message },
+        'PIPELINE_FAILED'
+      );
       socket.emit(SOCKET_EVENTS.SESSION_ERROR, { message: 'Something went wrong. Please try again.' });
       session.fsm.transition(STATES.ERROR);
     } finally {
@@ -243,20 +287,26 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
     const session = sessionManager.getSession(socket.id);
     if (!session) return;
 
-    logger.info({ socketId: socket.id }, 'USER_INTERRUPT_RECEIVED');
+    logger.info(
+      { sessionId: socket.id, requestId: session.currentRequestId || '' },
+      'USER_INTERRUPT_RECEIVED'
+    );
     try {
       session.fsm.transition(STATES.INTERRUPTED);
       session.abortActiveTasks();
       session.clearBuffers();
       session.fsm.transition(STATES.LISTENING);
     } catch (err) {
-      logger.error({ socketId: socket.id, error: err.message }, 'Interruption handler failed');
+      logger.error(
+        { sessionId: socket.id, requestId: session.currentRequestId || '', error: err.message },
+        'Interruption handler failed'
+      );
     }
   });
 
   // ── Connection cleanup ───────────────────────────────────────────────────
   socket.on('disconnect', (reason) => {
-    logger.info({ socketId: socket.id, reason }, 'USER_DISCONNECTED');
+    logger.info({ sessionId: socket.id, reason }, 'USER_DISCONNECTED');
     sessionManager.deleteSession(socket.id);
   });
 }
