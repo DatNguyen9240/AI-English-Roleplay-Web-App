@@ -50,7 +50,7 @@ class MockLlmService extends LlmService {
       "That's really interesting! Your English is coming along nicely. " +
       'Could you tell me a little more about what you enjoy doing on weekends?';
 
-    if (systemPrompt) {
+    if (systemPrompt && messages.length === 0) {
       const topicMatch = systemPrompt.match(/practice topic is: "([^"]+)"/i);
       if (topicMatch && topicMatch[1]) {
         const topicName = topicMatch[1];
