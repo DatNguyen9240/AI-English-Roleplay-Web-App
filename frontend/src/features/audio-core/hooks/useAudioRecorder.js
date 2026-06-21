@@ -1,88 +1,59 @@
-import { useState, useRef, useCallback } from 'react';
-import { io } from 'socket.io-client';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { downsampleBuffer, convertFloat32ToInt16 } from '../utils/audioDownsampler';
+import { audioConfig } from '../config/audioConfig';
+import { EnergyVadProcessor } from '../services/EnergyVadProcessor';
+import { SocketIOStreamer } from '../services/SocketIOStreamer';
+import { logger } from '../../../utils/logger';
 
-const SAMPLING_RATE = 16000;
-const CHUNK_DURATION_MS = 500;
-const SAMPLES_PER_CHUNK = (SAMPLING_RATE * CHUNK_DURATION_MS) / 1000; // 8000 samples
+const SAMPLES_PER_CHUNK = (audioConfig.targetSampleRate * audioConfig.chunkDurationMs) / 1000;
 
-export function useAudioRecorder(socketUrl = 'http://localhost:5000') {
+// Path to the AudioWorklet module served from /public
+const WORKLET_MODULE_URL = '/worklets/audio-capture-processor.worklet.js';
+
+/**
+ * Custom React hook coordinating Web Audio streams, VAD transitions,
+ * and binary audio streaming via abstract service interfaces (Section 7.5).
+ *
+ * Audio pipeline:
+ *   Microphone → AudioWorkletNode (dedicated thread) → downsample → PCM16 chunks → SocketIOStreamer
+ */
+export function useAudioRecorder(socketUrl) {
   const [isRecording, setIsRecording] = useState(false);
-  const [status, setStatus] = useState('IDLE'); // IDLE, LISTENING, PROCESSING
+  const [status, setStatus] = useState('IDLE'); // IDLE, LISTENING, PROCESSING, ERROR
   const [rmsVolume, setRmsVolume] = useState(0);
 
-  const socketRef = useRef(null);
+  // Service layer refs — lazily initialized once per component mount
+  const streamerRef = useRef(null);
+  const vadProcessorRef = useRef(null);
+  if (!streamerRef.current) streamerRef.current = new SocketIOStreamer();
+  if (!vadProcessorRef.current) vadProcessorRef.current = new EnergyVadProcessor(audioConfig);
+
+  // Web Audio API node refs
   const audioContextRef = useRef(null);
   const mediaStreamRef = useRef(null);
-  const processorNodeRef = useRef(null);
+  const workletNodeRef = useRef(null);   // AudioWorkletNode (replaces deprecated ScriptProcessorNode)
   const audioInputRef = useRef(null);
 
   // Accumulated sample buffer for downsampling
   const audioBufferQueueRef = useRef([]);
   const sequenceNumberRef = useRef(0);
-  
-  // VAD state trackers
-  const silenceTimerRef = useRef(null);
-  const speakingActiveRef = useRef(false);
+  const lastVolumeUpdateRef = useRef(0); // Throttle rmsVolume state to ~30fps
 
-  // Constants for VAD (Thresholds can be moved to config later)
-  const VAD_VOLUME_THRESHOLD = 0.015; // RMS threshold
-  const VAD_SILENCE_TIMEOUT_MS = 1500; // 1.5 seconds silence triggers speech-end
-
-  // Clean linear interpolation downsampler
-  const downsampleBuffer = (buffer, inputSampleRate, outputSampleRate) => {
-    if (inputSampleRate === outputSampleRate) {
-      return buffer;
-    }
-    const sampleRateRatio = inputSampleRate / outputSampleRate;
-    const newLength = Math.round(buffer.length / sampleRateRatio);
-    const result = new Float32Array(newLength);
-    let offsetResult = 0;
-    let offsetBuffer = 0;
-    while (offsetResult < result.length) {
-      const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
-      let accum = 0;
-      let count = 0;
-      for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
-        accum += buffer[i];
-        count++;
-      }
-      result[offsetResult] = count > 0 ? accum / count : 0;
-      offsetResult++;
-      offsetBuffer = nextOffsetBuffer;
-    }
-    return result;
-  };
-
-  // Convert Float32Array to 16-bit Signed PCM ArrayBuffer
-  const convertFloat32ToInt16 = (buffer) => {
-    let l = buffer.length;
-    const arrayBuffer = new ArrayBuffer(l * 2);
-    const view = new DataView(arrayBuffer);
-    for (let i = 0; i < l; i++) {
-      const s = Math.max(-1, Math.min(1, buffer[i]));
-      const pcmValue = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      view.setInt16(i * 2, pcmValue, true); // Little-Endian
-    }
-    return arrayBuffer;
-  };
+  // Forward ref to stopRecording — prevents stale closure in useEffect cleanup
+  const stopRecordingRef = useRef(null);
 
   // Stop recording helper
   const stopRecording = useCallback(() => {
-    if (!isRecording) return;
-
     setIsRecording(false);
     setStatus('IDLE');
     setRmsVolume(0);
-    speakingActiveRef.current = false;
 
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
+    vadProcessorRef.current.reset();
 
-    if (processorNodeRef.current) {
-      processorNodeRef.current.disconnect();
-      processorNodeRef.current = null;
+    if (workletNodeRef.current) {
+      workletNodeRef.current.port.onmessage = null; // detach message handler
+      workletNodeRef.current.disconnect();
+      workletNodeRef.current = null;
     }
 
     if (audioInputRef.current) {
@@ -100,36 +71,52 @@ export function useAudioRecorder(socketUrl = 'http://localhost:5000') {
       audioContextRef.current = null;
     }
 
-    if (socketRef.current) {
-      socketRef.current.emit('speech-end');
-      socketRef.current.disconnect();
-      socketRef.current = null;
+    if (streamerRef.current) {
+      streamerRef.current.sendSpeechEnd();
+      streamerRef.current.disconnect();
     }
 
     audioBufferQueueRef.current = [];
     sequenceNumberRef.current = 0;
-  }, [isRecording]);
+    lastVolumeUpdateRef.current = 0;
+  }, []);
+
+  // Keep forward ref in sync with latest stopRecording
+  stopRecordingRef.current = stopRecording;
+
+  // Safety cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopRecordingRef.current();
+    };
+  }, []);
 
   // Start recording
   const startRecording = useCallback(async () => {
-    if (isRecording) return;
+    setIsRecording(true);
+    setStatus('LISTENING');
+    sequenceNumberRef.current = 0;
+    audioBufferQueueRef.current = [];
+    vadProcessorRef.current.reset();
 
     try {
-      // 1. Initialize WebSocket Connection
-      socketRef.current = io(socketUrl, {
-        transports: ['websocket'],
+      // 1. Establish Signaling Stream
+      streamerRef.current.connect(socketUrl, {
+        onConnect: () => {
+          logger.log('[Socket] Connected to backend');
+        },
+        onConnectError: (err) => {
+          logger.error('[Socket] Connection error:', err.message);
+          setStatus('ERROR');
+          stopRecording();
+        },
+        onDisconnect: () => {
+          logger.log('[Socket] Disconnected from backend');
+          stopRecording();
+        },
       });
 
-      socketRef.current.on('connect', () => {
-        console.log('[Socket] Connected to backend');
-      });
-
-      socketRef.current.on('disconnect', () => {
-        console.log('[Socket] Disconnected from backend');
-        stopRecording();
-      });
-
-      // 2. Request microphone access with Echo Cancellation
+      // 2. Request microphone access with acoustic improvements
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -139,93 +126,69 @@ export function useAudioRecorder(socketUrl = 'http://localhost:5000') {
       });
 
       mediaStreamRef.current = stream;
-      
+
       // 3. Setup Web Audio API Context
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      const audioContext = new AudioContextClass();
+      const audioContext = new window.AudioContext();
       audioContextRef.current = audioContext;
 
-      // Unlock browser autoplay block if context is suspended
+      // Unlock browser autoplay block if context is suspended (iOS Safari policy)
       if (audioContext.state === 'suspended') {
         await audioContext.resume();
       }
 
+      // 4. Register and attach AudioWorkletNode
+      //    AudioWorkletNode runs in a dedicated audio rendering thread —
+      //    unlike the deprecated ScriptProcessorNode which ran on the main thread.
+      await audioContext.audioWorklet.addModule(WORKLET_MODULE_URL);
+      const workletNode = new AudioWorkletNode(audioContext, 'audio-capture-processor');
+      workletNodeRef.current = workletNode;
+
       audioInputRef.current = audioContext.createMediaStreamSource(stream);
-      
-      // ScriptProcessorNode for basic MVP downsampling buffer (size 4096)
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
-      processorNodeRef.current = processor;
+      audioInputRef.current.connect(workletNode);
+      workletNode.connect(audioContext.destination);
 
-      audioInputRef.current.connect(processor);
-      processor.connect(audioContext.destination);
+      // 5. Process audio frames posted from the worklet thread
+      workletNode.port.onmessage = (event) => {
+        const inputData = event.data; // Float32Array (zero-copy transfer)
 
-      setIsRecording(true);
-      setStatus('LISTENING');
-      sequenceNumberRef.current = 0;
-      audioBufferQueueRef.current = [];
+        // Run VAD — fires silence callback when speech pauses exceed threshold
+        vadProcessorRef.current.process(inputData, () => {
+          logger.log('[VAD] Silence detected, triggering speech-end');
+          setStatus('PROCESSING');
+          stopRecording();
+        });
 
-      // 4. Hook audio process event
-      processor.onaudioprocess = (e) => {
-        const inputData = e.inputBuffer.getChannelData(0);
-
-        // Calculate current chunk RMS Volume for VAD
-        let sum = 0;
-        for (let i = 0; i < inputData.length; i++) {
-          sum += inputData[i] * inputData[i];
-        }
-        const rms = Math.sqrt(sum / inputData.length);
-        setRmsVolume(rms);
-
-        // Downsample input from native rate (e.g. 48kHz) to 16kHz
-        const downsampled = downsampleBuffer(inputData, audioContext.sampleRate, SAMPLING_RATE);
-        
-        // Push downsampled samples into active queue
-        for (let i = 0; i < downsampled.length; i++) {
-          audioBufferQueueRef.current.push(downsampled[i]);
+        // Throttle volume UI updates to ~30fps (avoids excessive re-renders)
+        const now = performance.now();
+        if (now - lastVolumeUpdateRef.current > 33) {
+          setRmsVolume(vadProcessorRef.current.getVolume());
+          lastVolumeUpdateRef.current = now;
         }
 
-        // VAD Logic (Silence trigger)
-        if (rms > VAD_VOLUME_THRESHOLD) {
-          speakingActiveRef.current = true;
-          if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-            silenceTimerRef.current = null;
-          }
-        } else if (speakingActiveRef.current) {
-          // If user was speaking and now fell silent, start silence timeout
-          if (!silenceTimerRef.current) {
-            silenceTimerRef.current = setTimeout(() => {
-              console.log('[VAD] Silence detected, trigger speech-end');
-              setStatus('PROCESSING');
-              stopRecording();
-            }, VAD_SILENCE_TIMEOUT_MS);
-          }
-        }
+        // Downsample to target sample rate (e.g. 48kHz → 16kHz)
+        const downsampled = downsampleBuffer(
+          inputData,
+          audioContext.sampleRate,
+          audioConfig.targetSampleRate
+        );
 
-        // Slice queue into 500ms chunks (8000 samples) and emit
+        // Append downsampled samples into accumulation queue
+        audioBufferQueueRef.current.push(...downsampled);
+
+        // Slice queue into fixed-size chunks and stream
         while (audioBufferQueueRef.current.length >= SAMPLES_PER_CHUNK) {
-          const chunkToEmit = audioBufferQueueRef.current.slice(0, SAMPLES_PER_CHUNK);
-          audioBufferQueueRef.current = audioBufferQueueRef.current.slice(SAMPLES_PER_CHUNK);
-
-          // Convert slice to PCM 16-bit
+          const chunkToEmit = audioBufferQueueRef.current.splice(0, SAMPLES_PER_CHUNK);
           const pcm16Buffer = convertFloat32ToInt16(new Float32Array(chunkToEmit));
-
-          // Emit binary packet over WebSocket
-          if (socketRef.current && socketRef.current.connected) {
-            socketRef.current.emit('audio-chunk', {
-              sequenceNumber: sequenceNumberRef.current++,
-              chunk: pcm16Buffer,
-            });
-          }
+          streamerRef.current.sendChunk(sequenceNumberRef.current++, pcm16Buffer);
         }
       };
 
     } catch (err) {
-      console.error('Failed to start audio recording:', err);
+      logger.error('Failed to start audio recording:', err);
       setStatus('ERROR');
       stopRecording();
     }
-  }, [isRecording, socketUrl, stopRecording]);
+  }, [socketUrl, stopRecording]);
 
   return {
     isRecording,
