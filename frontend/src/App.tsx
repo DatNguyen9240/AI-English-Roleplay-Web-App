@@ -33,7 +33,7 @@ function App(): React.ReactElement {
   return (
     <PageShell>
       {/* Top Header */}
-      <div className="w-full max-w-md flex justify-between items-center mb-6 px-2">
+      <div className="w-full max-w-4xl flex justify-between items-center mb-6 px-2">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/10">
             <Sparkles className="w-4 h-4 text-white" />

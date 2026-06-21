@@ -51,12 +51,12 @@ export function AudioDashboard({
     <div className="max-w-4xl w-full bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl flex flex-col transition-all duration-300">
       
       {/* App Title Header */}
-      <div className="w-full border-b border-slate-800/80 pb-4 mb-6 flex flex-col md:flex-row justify-between items-center gap-2">
+      <div className="w-full border-b border-slate-800/80 pb-4 mb-6 flex flex-col sm:flex-row justify-between items-center gap-2">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent text-center md:text-left">
+          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent text-center sm:text-left">
             AI English Roleplay
           </h1>
-          <p className="text-xs text-slate-400 text-center md:text-left mt-0.5">
+          <p className="text-xs text-slate-400 text-center sm:text-left mt-0.5">
             Practice spoken English with an interactive AI tutor.
           </p>
         </div>
@@ -68,10 +68,10 @@ export function AudioDashboard({
       </div>
 
       {/* Main Grid: Left and Right Columns */}
-      <div className="w-full flex flex-col md:flex-row gap-8 items-stretch">
+      <div className="w-full flex flex-col sm:flex-row gap-6 items-stretch">
         
         {/* Left Column (State, Volume Visualizer & Connection Controls) */}
-        <div className="w-full md:w-5/12 bg-slate-950/40 border border-slate-800/60 rounded-2xl p-6 flex flex-col items-center justify-between min-h-[300px] shadow-inner">
+        <div className="w-full sm:w-5/12 bg-slate-950/40 border border-slate-800/60 rounded-2xl p-4 flex flex-col items-center justify-between min-h-[280px] shadow-inner">
           {!isSessionActive ? (
             /* Idle Left: Topic Input & Start */
             <div className="w-full flex flex-col justify-center h-full gap-5">
@@ -172,10 +172,10 @@ export function AudioDashboard({
         </div>
 
         {/* Right Column (Dialogue Display, Subtitles, Text Drafting & User Guide) */}
-        <div className="w-full md:w-7/12 flex flex-col justify-between min-h-[300px]">
+        <div className="w-full sm:w-7/12 flex flex-col justify-between min-h-[280px]">
           {!isSessionActive ? (
             /* Idle Right: Quick Guide Onboard */
-            <div className="w-full bg-slate-950/20 border border-slate-800/40 rounded-2xl p-6 text-left flex flex-col justify-center h-full">
+            <div className="w-full bg-slate-950/20 border border-slate-800/40 rounded-2xl p-4 text-left flex flex-col justify-center h-full">
               <div className="flex items-center gap-1.5 mb-4">
                 <HelpCircle className="w-4 h-4 text-slate-455" />
                 <h3 className="text-sm font-bold text-slate-300 font-mono uppercase tracking-wider">
@@ -192,7 +192,7 @@ export function AudioDashboard({
             </div>
           ) : (
             /* Active Right: Transcripts, Subtitles & Text Input */
-            <div className="w-full flex flex-col gap-4 justify-between h-full">
+            <div className="w-full sm:w-7/12 flex flex-col gap-4 justify-between h-full">
               
               {/* Message Box Areas */}
               <div className="flex flex-col gap-3 flex-1 justify-start">
