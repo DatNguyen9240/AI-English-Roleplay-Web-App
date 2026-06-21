@@ -46,7 +46,18 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     statusRef.current = status;
   }, [status]);
 
+  const updateStatus = useCallback((newStatus: RecordingStatus) => {
+    setStatus(newStatus);
+    statusRef.current = newStatus;
+  }, []);
+
   const triggerInterruption = useCallback((): void => {
+    if (statusRef.current !== 'SPEAKING') {
+      logger.warn('[useAudioRecorder] triggerInterruption called but state is not SPEAKING:', statusRef.current);
+      return;
+    }
+    updateStatus('LISTENING');
+
     logger.log('[useAudioRecorder] USER INTERRUPTED AI — Triggering local interruption cleanup');
     playoutQueueRef.current?.stop();
     setCurrentPlayingSentence('');
@@ -58,8 +69,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     sequenceNumberRef.current = 0;
 
     setIsRecording(true);
-    setStatus('LISTENING');
-  }, []);
+  }, [updateStatus]);
 
   const triggerInterruptionRef = useRef<() => void>(() => undefined);
   useEffect(() => {
@@ -122,15 +132,15 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setRmsVolume(0);
     vadProcessorRef.current?.reset();
 
-    setStatus('PROCESSING');
+    updateStatus('PROCESSING');
     streamerRef.current?.sendSpeechEnd();
 
     sttTimeoutRef.current = setTimeout(() => {
       logger.warn('[STT] Timeout — no stt-completed received');
-      setStatus('ERROR');
+      updateStatus('ERROR');
       streamerRef.current?.disconnect();
     }, audioConfig.sttTimeoutMs);
-  }, []);
+  }, [updateStatus]);
 
   stopAudioRef.current = stopAudio;
   stopRecordingRef.current = stopRecording;
@@ -159,7 +169,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
 
   const startRecording = useCallback(async (): Promise<void> => {
     setIsRecording(true);
-    setStatus('LISTENING');
+    updateStatus('LISTENING');
     setTranscript('');
     setLlmText('');
     setCurrentPlayingSentence('');
@@ -177,7 +187,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         onConnect: () => logger.log('[Socket] Connected to backend'),
         onConnectError: (err: Error) => {
           logger.error('[Socket] Connection error:', err.message);
-          setStatus('ERROR');
+          updateStatus('ERROR');
           stopAudioRef.current();
         },
         onDisconnect: (reason: string) => {
@@ -189,15 +199,15 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
 
       // ── STT result → transition to THINKING ─────────────────────────────
       streamerRef.current!.on(SOCKET_EVENTS.STT_COMPLETED, ({ transcript: text, latencyMs }) => {
-        clearTimeout(sttTimeoutRef.current ?? undefined);
-        logger.log(`[STT] Completed in ${latencyMs}ms: "${text}"`);
-        setTranscript(text);
-        setStatus('THINKING');
+          clearTimeout(sttTimeoutRef.current ?? undefined);
+          logger.log(`[STT] Completed in ${latencyMs}ms: "${text}"`);
+          setTranscript(text);
+          updateStatus('THINKING');
 
         // Start LLM timeout watchdog
         llmTimeoutRef.current = setTimeout(() => {
           logger.warn('[LLM] Timeout — no llm-stream-done received');
-          setStatus('ERROR');
+          updateStatus('ERROR');
           streamerRef.current?.disconnect();
         }, audioConfig.llmTimeoutMs);
       });
@@ -234,7 +244,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         clearTimeout(sttTimeoutRef.current ?? undefined);
         clearTimeout(llmTimeoutRef.current ?? undefined);
         logger.error('[Socket] Session error:', message);
-        setStatus('ERROR');
+        updateStatus('ERROR');
         streamerRef.current?.disconnect();
         playoutQueueRef.current?.stop();
       });
@@ -262,7 +272,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         queue.onSentenceStart = (sentenceText) => {
           setCurrentPlayingSentence(sentenceText);
           setHighlightedWordIndex(-1);
-          setStatus('SPEAKING');
+          updateStatus('SPEAKING');
         };
         queue.onWordSpoken = (_wordText, index) => {
           setHighlightedWordIndex(index);
@@ -272,7 +282,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
           setCurrentPlayingSentence('');
           setHighlightedWordIndex(-1);
           setIsRecording(true);
-          setStatus('LISTENING');
+          updateStatus('LISTENING');
         };
         playoutQueueRef.current = queue;
       }
@@ -331,11 +341,11 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       };
     } catch (err) {
       logger.error('[Audio] Failed to start recording:', err);
-      setStatus('ERROR');
+      updateStatus('ERROR');
       stopAudioRef.current();
       streamerRef.current?.disconnect();
     }
-  }, [socketUrl]);
+  }, [socketUrl, updateStatus]);
 
   return {
     isRecording,
