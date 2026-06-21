@@ -18,8 +18,9 @@ export interface UseAudioRecorderReturn {
   llmText: string;
   currentPlayingSentence: string;
   highlightedWordIndex: number;
-  startRecording: () => Promise<void>;
+  startRecording: (topic?: string) => Promise<void>;
   stopRecording: () => void;
+  sendTextMessage: (text: string) => void;
 }
 
 /**
@@ -167,7 +168,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const startRecording = useCallback(async (): Promise<void> => {
+  const startRecording = useCallback(async (topic?: string): Promise<void> => {
     setIsRecording(true);
     updateStatus('LISTENING');
     setTranscript('');
@@ -184,7 +185,13 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
 
     try {
       streamerRef.current!.connect(socketUrl, {
-        onConnect: () => logger.log('[Socket] Connected to backend'),
+        onConnect: () => {
+          logger.log('[Socket] Connected to backend');
+          if (topic) {
+            logger.log('[useAudioRecorder] Sending custom topic to backend:', topic);
+            streamerRef.current?.sendTopic(topic);
+          }
+        },
         onConnectError: (err: Error) => {
           logger.error('[Socket] Connection error:', err.message);
           updateStatus('ERROR');
@@ -347,6 +354,22 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     }
   }, [socketUrl, updateStatus]);
 
+  const sendTextMessage = useCallback((text: string): void => {
+    if (!text.trim()) return;
+    logger.log('[useAudioRecorder] Sending user text message:', text);
+    
+    // Clear audio buffers to ignore background noise during typing
+    audioBufferQueueRef.current = [];
+    sequenceNumberRef.current = 0;
+    vadProcessorRef.current?.reset();
+
+    // Send the text message to the server
+    streamerRef.current?.sendTextInput(text);
+
+    // Update local state to PROCESSING
+    updateStatus('PROCESSING');
+  }, [updateStatus]);
+
   return {
     isRecording,
     status,
@@ -357,5 +380,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     highlightedWordIndex,
     startRecording,
     stopRecording,
+    sendTextMessage,
   };
 }

@@ -112,73 +112,21 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
     }
   });
 
-  // ── Handle end of speech — triggers STT → LLM pipeline ──────────────────
-  socket.on(SOCKET_EVENTS.SPEECH_END, async () => {
-    const session = sessionManager.getSession(socket.id);
-    if (!session || session.buffers.length === 0) {
-      logger.warn({ sessionId: socket.id }, 'Received speech-end but no buffered audio found');
-      return;
-    }
+  // Helper to execute the LLM -> TTS generation pipeline
+  async function executeLlmAndTtsPipeline(session, socket, requestId) {
+    // Transition FSM to thinking
+    session.fsm.transition(STATES.THINKING);
 
-    const requestId = session.currentRequestId || `req-${socket.id}-${Date.now()}`;
-    if (!session.currentRequestId) {
-      session.currentRequestId = requestId;
-    }
+    const llmStart = Date.now();
+    logger.info({ sessionId: socket.id, requestId }, 'LLM_STARTED');
 
-    // Transition to processing state
-    try {
-      session.fsm.transition(STATES.PROCESSING_STT);
-    } catch (err) {
-      return; // Invalid transition, ignore
-    }
+    const signal = session.createAbortSignal();
+    const contextMessages = session.conversationHistory.slice(-MAX_CONTEXT_MESSAGES);
 
-    logger.info(
-      { sessionId: socket.id, requestId },
-      'VAD_DETECTED_SILENCE'
-    );
-
-    const sttStart = Date.now();
+    let fullResponse = '';
+    let sentenceSeq = 0;
 
     try {
-      // ── Phase 3: STT ────────────────────────────────────────────────────
-      if (SAVE_DEBUG_RECORDINGS) {
-        const result = await storageService.saveWavRecording(socket.id, session.buffers);
-        logger.info(
-          { sessionId: socket.id, requestId, fileName: result.fileName, totalBytes: result.totalBytes },
-          'DEBUG_WAV_SAVED'
-        );
-      }
-
-      logger.info({ sessionId: socket.id, requestId }, 'STT_STARTED');
-      const transcript = await sttService.transcribe(session.buffers);
-      const sttLatencyMs = Date.now() - sttStart;
-
-      logger.info(
-        { sessionId: socket.id, requestId, transcript, sttLatencyMs },
-        'STT_COMPLETED'
-      );
-
-      socket.emit(SOCKET_EVENTS.STT_COMPLETED, { transcript, latencyMs: sttLatencyMs });
-
-      // Add user turn to conversation history
-      session.conversationHistory.push({ role: 'user', content: transcript });
-
-      // Transition FSM to thinking
-      session.fsm.transition(STATES.THINKING);
-
-      // ── Phase 4: LLM ────────────────────────────────────────────────────
-      const llmStart = Date.now();
-      logger.info({ sessionId: socket.id, requestId }, 'LLM_STARTED');
-
-      // Create a fresh AbortSignal linked to LLM and TTS tasks for this turn
-      const signal = session.createAbortSignal();
-
-      // Trim history to max context window (keeps most-recent turns)
-      const contextMessages = session.conversationHistory.slice(-MAX_CONTEXT_MESSAGES);
-
-      let fullResponse = '';
-      let sentenceSeq = 0;
-
       // TokenAggregator prepares sentence-level batches for TTS (Phase 5)
       const aggregator = new TokenAggregator(
         async (sentence) => {
@@ -242,7 +190,8 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
           socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token });
           aggregator.push(token);
         },
-        signal
+        signal,
+        session.customSystemPrompt
       );
 
       aggregator.flush();
@@ -279,6 +228,173 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
     } finally {
       // Reset audio buffers
       session.clearBuffers();
+    }
+  }
+
+  // ── Handle end of speech — triggers STT → LLM pipeline ──────────────────
+  socket.on(SOCKET_EVENTS.SPEECH_END, async () => {
+    const session = sessionManager.getSession(socket.id);
+    if (!session || session.buffers.length === 0) {
+      logger.warn({ sessionId: socket.id }, 'Received speech-end but no buffered audio found');
+      return;
+    }
+
+    const requestId = session.currentRequestId || `req-${socket.id}-${Date.now()}`;
+    if (!session.currentRequestId) {
+      session.currentRequestId = requestId;
+    }
+
+    // Transition to processing state
+    try {
+      session.fsm.transition(STATES.PROCESSING_STT);
+    } catch (err) {
+      return; // Invalid transition, ignore
+    }
+
+    logger.info(
+      { sessionId: socket.id, requestId },
+      'VAD_DETECTED_SILENCE'
+    );
+
+    const sttStart = Date.now();
+
+    try {
+      // ── Phase 3: STT ────────────────────────────────────────────────────
+      if (SAVE_DEBUG_RECORDINGS) {
+        const result = await storageService.saveWavRecording(socket.id, session.buffers);
+        logger.info(
+          { sessionId: socket.id, requestId, fileName: result.fileName, totalBytes: result.totalBytes },
+          'DEBUG_WAV_SAVED'
+        );
+      }
+
+      logger.info({ sessionId: socket.id, requestId }, 'STT_STARTED');
+      const transcript = await sttService.transcribe(session.buffers);
+      const sttLatencyMs = Date.now() - sttStart;
+
+      logger.info(
+        { sessionId: socket.id, requestId, transcript, sttLatencyMs },
+        'STT_COMPLETED'
+      );
+
+      socket.emit(SOCKET_EVENTS.STT_COMPLETED, { transcript, latencyMs: sttLatencyMs });
+
+      // Add user turn to conversation history
+      session.conversationHistory.push({ role: 'user', content: transcript });
+
+      // Run pipeline
+      await executeLlmAndTtsPipeline(session, socket, requestId);
+
+    } catch (err) {
+      logger.error(
+        { sessionId: socket.id, requestId, error: err.message },
+        'SPEECH_END_PROCESSING_FAILED'
+      );
+      socket.emit(SOCKET_EVENTS.SESSION_ERROR, { message: 'Something went wrong processing your speech.' });
+      session.fsm.transition(STATES.ERROR);
+    }
+  });
+
+  // ── Handle incoming text input (draft and send) ──────────────────────────
+  socket.on(SOCKET_EVENTS.TEXT_INPUT, async (data) => {
+    const session = sessionManager.getSession(socket.id);
+    if (!session) {
+      logger.warn({ sessionId: socket.id }, 'Received text-input but session state is missing');
+      return;
+    }
+
+    const { text } = data;
+    if (!text || typeof text !== 'string') {
+      logger.warn({ sessionId: socket.id }, 'Received text-input with empty or invalid text');
+      return;
+    }
+
+    const requestId = `req-${socket.id}-${Date.now()}`;
+    session.currentRequestId = requestId;
+
+    logger.info(
+      { sessionId: socket.id, requestId, text },
+      'USER_SUBMITTED_TEXT'
+    );
+
+    try {
+      // If AI is currently speaking/generating, trigger interruption first
+      if (session.fsm.state === STATES.SPEAKING || session.fsm.state === STATES.THINKING) {
+        session.fsm.transition(STATES.INTERRUPTED);
+        session.abortActiveTasks();
+        session.clearBuffers();
+        session.fsm.transition(STATES.LISTENING);
+      }
+
+      // Transition to processing state
+      session.fsm.transition(STATES.PROCESSING_STT);
+
+      // Emit stt-completed immediately with 0ms latency so client renders the user's text
+      socket.emit(SOCKET_EVENTS.STT_COMPLETED, { transcript: text, latencyMs: 0 });
+
+      // Add user turn to conversation history
+      session.conversationHistory.push({ role: 'user', content: text });
+
+      // Run pipeline
+      await executeLlmAndTtsPipeline(session, socket, requestId);
+
+    } catch (err) {
+      logger.error(
+        { sessionId: socket.id, requestId, error: err.message },
+        'TEXT_INPUT_PROCESSING_FAILED'
+      );
+      socket.emit(SOCKET_EVENTS.SESSION_ERROR, { message: 'Something went wrong processing your text.' });
+      session.fsm.transition(STATES.ERROR);
+    }
+  });
+
+  // ── Handle custom topic setup ───────────────────────────────────────────
+  socket.on(SOCKET_EVENTS.SET_TOPIC, async (data) => {
+    const session = sessionManager.getSession(socket.id);
+    if (!session) {
+      logger.warn({ sessionId: socket.id }, 'Received set-topic but session state is missing');
+      return;
+    }
+
+    const { topic } = data;
+    if (!topic || typeof topic !== 'string') {
+      logger.warn({ sessionId: socket.id }, 'Received set-topic with empty or invalid topic');
+      return;
+    }
+
+    const requestId = `req-${socket.id}-${Date.now()}`;
+    session.currentRequestId = requestId;
+
+    logger.info(
+      { sessionId: socket.id, requestId, topic },
+      'USER_SET_SCENARIO_TOPIC'
+    );
+
+    // Set custom system prompt for the topic
+    session.customSystemPrompt = 
+      `You are a professional AI English conversation partner. The conversation topic is: "${topic}". ` +
+      `Keep your responses extremely concise (2–3 sentences maximum), natural, and conversational. ` +
+      `React to what the user said, then ask a relevant follow-up question related to this topic to keep the conversation flowing. ` +
+      `Never use bullet points or markdown. Speak in plain, friendly English.`;
+
+    try {
+      // Transition FSM to processing then thinking
+      session.fsm.transition(STATES.PROCESSING_STT);
+      // Emit stt-completed with the system context message so the client shows the topic start
+      socket.emit(SOCKET_EVENTS.STT_COMPLETED, { 
+        transcript: `[Conversation Topic: ${topic}]`, 
+        latencyMs: 0 
+      });
+
+      // Execute LLM & TTS pipeline (AI will start speaking since history is empty)
+      await executeLlmAndTtsPipeline(session, socket, requestId);
+    } catch (err) {
+      logger.error(
+        { sessionId: socket.id, requestId, error: err.message },
+        'SET_TOPIC_PROCESSING_FAILED'
+      );
+      socket.emit(SOCKET_EVENTS.SESSION_ERROR, { message: 'Something went wrong starting the topic.' });
+      session.fsm.transition(STATES.ERROR);
     }
   });
 

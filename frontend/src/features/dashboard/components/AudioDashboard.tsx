@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TranscriptDisplay } from '@/features/conversation/components/TranscriptDisplay';
 import { SubtitleDisplay } from '@/features/conversation/components/SubtitleDisplay';
 import { RecordingStatus } from 'shared-contracts';
@@ -11,13 +11,15 @@ interface AudioDashboardProps {
   llmText: string;
   currentPlayingSentence?: string;
   highlightedWordIndex?: number;
-  startRecording: () => void;
+  startRecording: (topic?: string) => void;
   stopRecording: () => void;
+  sendTextMessage: (text: string) => void;
 }
 
 /**
  * Primary audio recording console.
  * Phase 4: Now displays both user transcript (STT) and streaming AI response (LLM).
+ * Updated: Supports text drafting/pasting and custom topic roleplay generation.
  */
 export function AudioDashboard({
   isRecording,
@@ -29,7 +31,9 @@ export function AudioDashboard({
   highlightedWordIndex,
   startRecording,
   stopRecording,
+  sendTextMessage,
 }: AudioDashboardProps): React.ReactElement {
+  const [topic, setTopic] = useState('');
   const volumePercentage = Math.min(100, Math.round(rmsVolume * 500));
 
   const isDisabled = status === 'PROCESSING' || status === 'THINKING' || status === 'SPEAKING';
@@ -39,7 +43,7 @@ export function AudioDashboard({
     status === 'PROCESSING' ? 'Transcribing…' :
     status === 'THINKING'   ? 'AI is responding…' :
     status === 'SPEAKING'   ? 'AI is speaking…' :
-    'Start Recording';
+    'Start General Conversation';
 
   return (
     <div className="max-w-md w-full bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl flex flex-col items-center">
@@ -48,7 +52,7 @@ export function AudioDashboard({
         AI English Roleplay
       </h1>
       <p className="text-sm text-slate-400 text-center mb-8">
-        Phase 4: Full turn-taking — Whisper STT + LLM stream.
+        Practice English conversations with an interactive AI tutor.
       </p>
 
       {/* FSM State Indicator */}
@@ -100,25 +104,77 @@ export function AudioDashboard({
         />
       </div>
 
-      {/* Control Buttons */}
-      <div className="w-full flex gap-4">
+      {/* Control Buttons & Inputs */}
+      <div className="w-full flex flex-col gap-4">
         {!isRecording ? (
-          <button
-            id="btn-start-recording"
-            onClick={startRecording}
-            disabled={isDisabled}
-            className="flex-1 py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white transition-colors shadow-lg shadow-blue-500/10 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {startButtonLabel}
-          </button>
+          <>
+            <div className="w-full flex flex-col gap-2">
+              <label className="text-xs font-semibold text-slate-400 text-left font-mono">
+                Custom Topic (e.g. Job Interview, Environment, Shopping)
+              </label>
+              <input
+                type="text"
+                placeholder="Leave blank for general chat..."
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                disabled={isDisabled}
+                className="w-full px-4 py-3 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+            <button
+              id="btn-start-recording"
+              onClick={() => startRecording(topic.trim() || undefined)}
+              disabled={isDisabled}
+              className="w-full py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white transition-colors shadow-lg shadow-blue-500/10 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {topic.trim() ? `Start Scenario: ${topic.trim()}` : startButtonLabel}
+            </button>
+          </>
         ) : (
-          <button
-            id="btn-stop-recording"
-            onClick={stopRecording}
-            className="flex-1 py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white transition-colors shadow-lg shadow-rose-500/10 focus:outline-none"
-          >
-            Stop &amp; Send
-          </button>
+          <>
+            {/* Drafting area for typed response */}
+            <div className="w-full border-t border-slate-800 pt-4 mb-2">
+              <div className="flex justify-between text-xs text-slate-400 mb-2 font-mono">
+                <span>Type or Paste Response</span>
+                <span className="text-blue-400 font-sans">Or speak freely via Mic</span>
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const form = e.currentTarget;
+                  const textarea = form.elements.namedItem('textInput') as HTMLTextAreaElement;
+                  if (textarea && textarea.value.trim()) {
+                    sendTextMessage(textarea.value);
+                    textarea.value = '';
+                  }
+                }}
+                className="w-full flex flex-col gap-2"
+              >
+                <textarea
+                  name="textInput"
+                  placeholder="Type or paste your English reply here..."
+                  disabled={status === 'PROCESSING' || status === 'THINKING'}
+                  rows={2}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-blue-500 transition-colors resize-none"
+                />
+                <button
+                  type="submit"
+                  disabled={status === 'PROCESSING' || status === 'THINKING'}
+                  className="w-full py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 text-white text-sm font-bold transition-all shadow-md focus:outline-none"
+                >
+                  Send Reply
+                </button>
+              </form>
+            </div>
+
+            <button
+              id="btn-stop-recording"
+              onClick={stopRecording}
+              className="w-full py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white transition-colors shadow-lg shadow-rose-500/10 focus:outline-none"
+            >
+              End Roleplay Session
+            </button>
+          </>
         )}
       </div>
 

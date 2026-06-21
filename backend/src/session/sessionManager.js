@@ -19,6 +19,9 @@ class Session {
     // Conversation history
     this.conversationHistory = []; // Array of { role: 'user'|'assistant', content: string }
     
+    // Custom System Prompt
+    this.customSystemPrompt = null;
+    
     // Cancellation tokens for current turn
     this.abortController = null;
     this.lastActiveTime = Date.now();

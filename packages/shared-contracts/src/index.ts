@@ -6,6 +6,8 @@ export const SOCKET_EVENTS = {
   AUDIO_CHUNK:    'audio-chunk',
   SPEECH_END:     'speech-end',
   USER_INTERRUPT: 'user-interrupt',
+  TEXT_INPUT:     'text-input',
+  SET_TOPIC:      'set-topic',
 
   // Server → Client
   STT_COMPLETED:    'stt-completed',

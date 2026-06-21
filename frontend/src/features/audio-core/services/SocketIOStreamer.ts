@@ -84,6 +84,20 @@ export class SocketIOStreamer {
     }
   }
 
+  /** Sends a text input message to the server */
+  sendTextInput(text: string): void {
+    if (this.socket?.connected) {
+      this.socket.emit(SOCKET_EVENTS.TEXT_INPUT, { text });
+    }
+  }
+
+  /** Emits a custom topic to start a topic-specific roleplay */
+  sendTopic(topic: string): void {
+    if (this.socket?.connected) {
+      this.socket.emit(SOCKET_EVENTS.SET_TOPIC, { topic });
+    }
+  }
+
   /** Disconnects and clears the socket reference */
   disconnect(): void {
     if (this.socket) {

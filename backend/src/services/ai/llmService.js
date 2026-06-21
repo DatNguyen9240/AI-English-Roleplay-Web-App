@@ -28,7 +28,7 @@ class LlmService {
    * @param {AbortSignal} [signal]
    * @returns {Promise<string>} Full accumulated response
    */
-  async generateStream(messages, onToken, signal) {
+  async generateStream(messages, onToken, signal, systemPrompt) {
     throw new Error('generateStream() must be implemented.');
   }
 
@@ -45,10 +45,18 @@ class LlmService {
  * No API key required. Used when USE_MOCKS=true.
  */
 class MockLlmService extends LlmService {
-  async generateStream(messages, onToken, signal) {
-    const mockResponse =
+  async generateStream(messages, onToken, signal, systemPrompt) {
+    let mockResponse =
       "That's really interesting! Your English is coming along nicely. " +
       'Could you tell me a little more about what you enjoy doing on weekends?';
+
+    if (systemPrompt) {
+      const topicMatch = systemPrompt.match(/conversation (?:topic is|about): "([^"]+)"/i);
+      if (topicMatch && topicMatch[1]) {
+        const topicName = topicMatch[1];
+        mockResponse = `Welcome to our practice session! Let's talk about ${topicName}. What are your thoughts on this topic?`;
+      }
+    }
 
     const words = mockResponse.split(' ');
     let fullText = '';
@@ -88,7 +96,11 @@ class OpenRouterLlmService extends LlmService {
     this.maxTokens = maxTokens;
   }
 
-  async generateStream(messages, onToken, signal) {
+  async generateStream(messages, onToken, signal, systemPrompt) {
+    const systemMsg = systemPrompt
+      ? { role: 'system', content: systemPrompt }
+      : this.systemMessage;
+
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -99,7 +111,7 @@ class OpenRouterLlmService extends LlmService {
       },
       body: JSON.stringify({
         model: this.model,
-        messages: [this.systemMessage, ...messages],
+        messages: [systemMsg, ...messages],
         stream: true,
         max_tokens: this.maxTokens,
       }),

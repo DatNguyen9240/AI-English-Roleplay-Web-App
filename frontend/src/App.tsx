@@ -19,6 +19,7 @@ function App(): React.ReactElement {
     highlightedWordIndex,
     startRecording,
     stopRecording,
+    sendTextMessage,
   } = useAudioRecorder(config.apiUrl);
 
   if (!user) {
@@ -66,6 +67,7 @@ function App(): React.ReactElement {
         highlightedWordIndex={highlightedWordIndex}
         startRecording={startRecording}
         stopRecording={stopRecording}
+        sendTextMessage={sendTextMessage}
       />
     </PageShell>
   );
