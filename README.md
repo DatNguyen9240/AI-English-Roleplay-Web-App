@@ -547,10 +547,10 @@ Phase 5: Streaming TTS & Playout Queue ✅ COMPLETE
 ├── ✅ Stream audio chunks to Client
 └── ✅ Write Playback Queue Manager on Client (sequenced ordered playout)
 
-Phase 6: Turn-Taking & Interruption loop
-├── Implement client interruption trigger (mic activity while speaking)
-├── Bind AbortControllers to cancel backend LLM/TTS streams
-└── Connect the FSM State loop
+Phase 6: Turn-Taking & Interruption loop ✅ COMPLETE
+├── ✅ Implement client interruption trigger (mic activity while speaking)
+├── ✅ Bind AbortControllers to cancel backend LLM/TTS streams
+└── ✅ Connect the FSM State loop
 
 Phase 7: Production Polish & Observability
 ├── Hook Sentry on FE and Pino trace logging on BE

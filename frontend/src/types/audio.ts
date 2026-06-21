@@ -20,6 +20,11 @@ export interface AudioConfig {
   chunkDurationMs: number;
   bitsPerSample: number;
   numChannels: number;
+  interruptionVolumeThreshold: number;
+  sttTimeoutMs: number;
+  llmTimeoutMs: number;
+  playbackLookaheadSec: number;
+  jitterBufferDelayMs: number;
 }
 
 /** Payload emitted by server on 'stt-completed' event */

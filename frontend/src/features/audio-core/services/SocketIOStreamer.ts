@@ -77,6 +77,13 @@ export class SocketIOStreamer {
     }
   }
 
+  /** Signals the server that the user has interrupted the playback */
+  sendUserInterrupt(): void {
+    if (this.socket?.connected) {
+      this.socket.emit(SOCKET_EVENTS.USER_INTERRUPT);
+    }
+  }
+
   /** Disconnects and clears the socket reference */
   disconnect(): void {
     if (this.socket) {

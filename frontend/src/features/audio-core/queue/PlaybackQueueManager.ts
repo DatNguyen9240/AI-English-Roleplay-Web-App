@@ -1,4 +1,5 @@
 import { logger } from '@/utils/logger';
+import { audioConfig } from '../config/audioConfig';
 
 export interface WordTiming {
   text: string;
@@ -98,7 +99,7 @@ export class PlaybackQueueManager {
             this.expectedSequenceNumber = this.jitterBuffer[0].sequenceNumber;
             this.processQueue();
           }
-        }, 150);
+        }, audioConfig.jitterBufferDelayMs);
       }
     }
   }
@@ -122,7 +123,7 @@ export class PlaybackQueueManager {
       let scheduledTime = this.nextPlayTime;
 
       // If we ran dry (nextPlayTime is in the past), start playing with a small lookahead buffer to avoid clicking/glitches
-      const lookahead = 0.05; // 50ms lookahead
+      const lookahead = audioConfig.playbackLookaheadSec;
       if (scheduledTime < currentTime + lookahead) {
         scheduledTime = currentTime + lookahead;
       }

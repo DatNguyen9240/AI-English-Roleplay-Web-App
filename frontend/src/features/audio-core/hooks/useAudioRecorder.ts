@@ -10,8 +10,6 @@ import type { RecordingStatus } from '@/types/audio';
 
 const SAMPLES_PER_CHUNK = (audioConfig.targetSampleRate * audioConfig.chunkDurationMs) / 1000;
 const WORKLET_MODULE_URL = '/worklets/audio-capture-processor.worklet.js';
-const STT_TIMEOUT_MS = 15_000;
-const LLM_TIMEOUT_MS = 30_000;
 
 export interface UseAudioRecorderReturn {
   isRecording: boolean;
@@ -43,6 +41,31 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [llmText, setLlmText] = useState('');
   const [currentPlayingSentence, setCurrentPlayingSentence] = useState('');
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
+
+  const statusRef = useRef<RecordingStatus>('IDLE');
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  const triggerInterruption = useCallback((): void => {
+    logger.log('[useAudioRecorder] USER INTERRUPTED AI — Triggering local interruption cleanup');
+    playoutQueueRef.current?.stop();
+    setCurrentPlayingSentence('');
+    setHighlightedWordIndex(-1);
+
+    streamerRef.current?.sendUserInterrupt();
+
+    audioBufferQueueRef.current = [];
+    sequenceNumberRef.current = 0;
+
+    setIsRecording(true);
+    setStatus('LISTENING');
+  }, []);
+
+  const triggerInterruptionRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    triggerInterruptionRef.current = triggerInterruption;
+  }, [triggerInterruption]);
 
   // Services — lazily initialized once per mount
   const streamerRef = useRef<SocketIOStreamer | null>(null);
@@ -96,7 +119,10 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
 
   /** Stops audio, signals server, enters PROCESSING. Socket kept alive. */
   const stopRecording = useCallback((): void => {
-    stopAudio();
+    setIsRecording(false);
+    setRmsVolume(0);
+    vadProcessorRef.current?.reset();
+
     setStatus('PROCESSING');
     streamerRef.current?.sendSpeechEnd();
 
@@ -104,8 +130,8 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       logger.warn('[STT] Timeout — no stt-completed received');
       setStatus('ERROR');
       streamerRef.current?.disconnect();
-    }, STT_TIMEOUT_MS);
-  }, [stopAudio]);
+    }, audioConfig.sttTimeoutMs);
+  }, []);
 
   stopAudioRef.current = stopAudio;
   stopRecordingRef.current = stopRecording;
@@ -174,7 +200,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
           logger.warn('[LLM] Timeout — no llm-stream-done received');
           setStatus('ERROR');
           streamerRef.current?.disconnect();
-        }, LLM_TIMEOUT_MS);
+        }, audioConfig.llmTimeoutMs);
       });
 
       // ── LLM tokens → accumulate into llmText ────────────────────────────
@@ -243,11 +269,11 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
           setHighlightedWordIndex(index);
         };
         queue.onQueueEmpty = () => {
-          logger.log('[useAudioRecorder] Playout queue empty. Turn complete, going IDLE');
-          setStatus('IDLE');
+          logger.log('[useAudioRecorder] Playout queue empty. Turn complete, auto-transitioning to LISTENING');
           setCurrentPlayingSentence('');
           setHighlightedWordIndex(-1);
-          streamerRef.current?.disconnect();
+          setIsRecording(true);
+          setStatus('LISTENING');
         };
         playoutQueueRef.current = queue;
       }
@@ -262,30 +288,46 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
 
       workletNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
         const inputData = event.data;
+        const currentStatus = statusRef.current;
 
-        vadProcessorRef.current?.process(inputData, () => {
-          logger.log('[VAD] Silence detected — triggering speech-end');
-          stopRecordingRef.current();
-        });
+        // 1. Interruption Check (during SPEAKING state)
+        if (currentStatus === 'SPEAKING') {
+          const volume = vadProcessorRef.current?.getVolume() ?? 0;
+          const interruptionThreshold = audioConfig.interruptionVolumeThreshold;
+          if (volume > interruptionThreshold) {
+            logger.log(`[useAudioRecorder] Interruption detected. Volume: ${volume.toFixed(3)} (Threshold: ${interruptionThreshold.toFixed(3)})`);
+            triggerInterruptionRef.current();
+            return;
+          }
+        }
 
+        // 2. Silence detection & Audio streaming (only in LISTENING state)
+        if (currentStatus === 'LISTENING') {
+          vadProcessorRef.current?.process(inputData, () => {
+            logger.log('[VAD] Silence detected — triggering speech-end');
+            stopRecordingRef.current();
+          });
+
+          const downsampled = downsampleBuffer(
+            inputData,
+            audioContext.sampleRate,
+            audioConfig.targetSampleRate
+          );
+
+          audioBufferQueueRef.current.push(...downsampled);
+
+          while (audioBufferQueueRef.current.length >= SAMPLES_PER_CHUNK) {
+            const chunk = audioBufferQueueRef.current.splice(0, SAMPLES_PER_CHUNK);
+            const pcm16 = convertFloat32ToInt16(new Float32Array(chunk));
+            streamerRef.current?.sendChunk(sequenceNumberRef.current++, pcm16);
+          }
+        }
+
+        // 3. Update volume visualizer
         const now = performance.now();
         if (now - lastVolumeUpdateRef.current > 33) {
           setRmsVolume(vadProcessorRef.current?.getVolume() ?? 0);
           lastVolumeUpdateRef.current = now;
-        }
-
-        const downsampled = downsampleBuffer(
-          inputData,
-          audioContext.sampleRate,
-          audioConfig.targetSampleRate
-        );
-
-        audioBufferQueueRef.current.push(...downsampled);
-
-        while (audioBufferQueueRef.current.length >= SAMPLES_PER_CHUNK) {
-          const chunk = audioBufferQueueRef.current.splice(0, SAMPLES_PER_CHUNK);
-          const pcm16 = convertFloat32ToInt16(new Float32Array(chunk));
-          streamerRef.current?.sendChunk(sequenceNumberRef.current++, pcm16);
         }
       };
     } catch (err) {

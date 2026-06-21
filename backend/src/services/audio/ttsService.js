@@ -8,9 +8,10 @@ class TtsService {
    * Synthesizes text into raw 16-bit PCM audio with word boundary timestamps.
    * @param {string} text - The text to synthesize.
    * @param {string} [requestId] - Associated request trace ID.
+   * @param {AbortSignal} [signal] - Optional AbortSignal.
    * @returns {Promise<{ audio: Buffer, sampleRate: number, words: Array<{ text: string, startMs: number, endMs: number }> }>}
    */
-  async synthesize(text, requestId) {
+  async synthesize(text, requestId, signal) {
     throw new Error('synthesize() must be implemented.');
   }
 }
@@ -20,7 +21,7 @@ class TtsService {
  * No API key required. Used when USE_MOCKS=true.
  */
 class MockTtsService extends TtsService {
-  async synthesize(text, requestId) {
+  async synthesize(text, requestId, signal) {
     const words = text.trim().split(/\s+/).filter(Boolean);
     const sampleRate = 16000; // 16kHz for mock
     const wordTimings = [];
@@ -28,6 +29,9 @@ class MockTtsService extends TtsService {
 
     // Calculate word timings
     for (const word of words) {
+      if (signal?.aborted) {
+        throw new Error('TTS synthesis aborted');
+      }
       const wordLen = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").length;
       // Heuristic: ~80ms per character + 100ms baseline duration
       const durationMs = Math.max(150, wordLen * 80 + 100);
@@ -91,20 +95,26 @@ class OpenAiTtsService extends TtsService {
   /**
    * @param {object} config
    * @param {string} config.apiKey
-   * @param {string} [config.model='tts-1']
-   * @param {string} [config.voice='alloy']
+   * @param {string} config.model
+   * @param {string} config.voice
    */
-  constructor({ apiKey, model = 'tts-1', voice = 'alloy' }) {
+  constructor({ apiKey, model, voice }) {
     super();
     if (!apiKey) {
       throw new Error('OpenAiTtsService requires an API key.');
+    }
+    if (!model) {
+      throw new Error('OpenAiTtsService requires a model (TTS_MODEL).');
+    }
+    if (!voice) {
+      throw new Error('OpenAiTtsService requires a voice (TTS_VOICE).');
     }
     this.apiKey = apiKey;
     this.model = model;
     this.voice = voice;
   }
 
-  async synthesize(text, requestId) {
+  async synthesize(text, requestId, signal) {
     const cleanText = text.trim();
     if (!cleanText) {
       return { audio: Buffer.alloc(0), sampleRate: 24000, words: [] };
@@ -122,6 +132,7 @@ class OpenAiTtsService extends TtsService {
         input: cleanText,
         response_format: 'pcm', // returns raw 24kHz 16-bit Mono PCM
       }),
+      signal,
     });
 
     if (!response.ok) {
