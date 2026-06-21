@@ -1,4 +1,4 @@
-const { SOCKET_EVENTS } = require('./socketEvents');
+const { SOCKET_EVENTS } = require('shared-contracts');
 const { TokenAggregator } = require('@services/ai/tokenAggregator');
 const { SessionManager } = require('../session/sessionManager');
 const { STATES } = require('../state-machine/fsm');

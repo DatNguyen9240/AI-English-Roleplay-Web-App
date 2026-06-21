@@ -3,10 +3,9 @@ import { downsampleBuffer, convertFloat32ToInt16 } from '../utils/audioDownsampl
 import { audioConfig } from '../config/audioConfig';
 import { EnergyVadProcessor } from '../services/EnergyVadProcessor';
 import { SocketIOStreamer } from '../services/SocketIOStreamer';
-import { SOCKET_EVENTS } from '../constants/socketEvents';
 import { PlaybackQueueManager } from '../queue/PlaybackQueueManager';
 import { logger } from '@/utils/logger';
-import type { RecordingStatus } from '@/types/audio';
+import { SOCKET_EVENTS, RecordingStatus } from 'shared-contracts';
 
 const SAMPLES_PER_CHUNK = (audioConfig.targetSampleRate * audioConfig.chunkDurationMs) / 1000;
 const WORKLET_MODULE_URL = '/worklets/audio-capture-processor.worklet.js';

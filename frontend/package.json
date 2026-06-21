@@ -12,6 +12,7 @@
   "dependencies": {
     "@sentry/react": "^7.102.0",
     "ai-english-roleplay-web-app": "file:..",
+    "shared-contracts": "file:../packages/shared-contracts",
     "framer-motion": "^11.0.8",
     "lucide-react": "^0.344.0",
     "react": "^18.2.0",

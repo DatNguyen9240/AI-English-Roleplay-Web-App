@@ -1,4 +1,4 @@
-import type { AudioConfig } from '@/types/audio';
+import { AudioConfig } from 'shared-contracts';
 
 /**
  * Audio format constants for the frontend capture pipeline.

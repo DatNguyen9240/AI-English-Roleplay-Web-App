@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import type { RecordingStatus } from '@/types/audio';
+import { RecordingStatus } from 'shared-contracts';
 
 interface SubtitleDisplayProps {
   llmText: string;

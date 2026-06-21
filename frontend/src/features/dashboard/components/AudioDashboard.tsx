@@ -1,7 +1,7 @@
 import React from 'react';
 import { TranscriptDisplay } from '@/features/conversation/components/TranscriptDisplay';
 import { SubtitleDisplay } from '@/features/conversation/components/SubtitleDisplay';
-import type { RecordingStatus } from '@/types/audio';
+import { RecordingStatus } from 'shared-contracts';
 
 interface AudioDashboardProps {
   isRecording: boolean;

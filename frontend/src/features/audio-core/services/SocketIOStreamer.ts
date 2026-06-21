@@ -1,12 +1,12 @@
 import { io, Socket } from 'socket.io-client';
-import { SOCKET_EVENTS } from '../constants/socketEvents';
+import { SOCKET_EVENTS } from 'shared-contracts';
 import type {
   SttCompletedPayload,
   LlmChunkPayload,
   LlmStreamDonePayload,
   SessionErrorPayload,
   TtsAudioChunkPayload,
-} from '@/types/audio';
+} from 'shared-contracts';
 
 interface StreamerOptions {
   onConnect?: () => void;

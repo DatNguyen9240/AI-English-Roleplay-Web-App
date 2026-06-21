@@ -1,5 +1,5 @@
 import React from 'react';
-import type { RecordingStatus } from '@/types/audio';
+import { RecordingStatus } from 'shared-contracts';
 
 interface TranscriptDisplayProps {
   status: RecordingStatus;

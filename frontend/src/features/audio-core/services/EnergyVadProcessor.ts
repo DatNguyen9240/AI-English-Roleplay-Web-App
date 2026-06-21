@@ -1,4 +1,4 @@
-import type { AudioConfig } from '@/types/audio';
+import { AudioConfig } from 'shared-contracts';
 
 /**
  * Voice Activity Detector using root-mean-square (RMS) energy analysis.

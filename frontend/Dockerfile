@@ -7,6 +7,9 @@ WORKDIR /app
 COPY package*.json ./
 COPY packages/ ./packages/
 
+# Install and build shared-contracts first
+RUN npm ci --prefix packages/shared-contracts && npm run build --prefix packages/shared-contracts
+
 # Copy and install frontend dependencies
 COPY frontend/package*.json ./frontend/
 RUN npm ci --prefix frontend

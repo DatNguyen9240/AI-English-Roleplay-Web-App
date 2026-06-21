@@ -25,6 +25,7 @@
   "dependencies": {
     "@prisma/client": "^5.10.2",
     "ai-english-roleplay-web-app": "file:..",
+    "shared-contracts": "file:../packages/shared-contracts",
     "bcryptjs": "^2.4.3",
     "cookie": "^1.1.1",
     "cookie-parser": "^1.4.7",
