@@ -429,7 +429,7 @@ Audio APIs behavior varies significantly across browsers. We define our compatib
          ▼
   [Frontend Container] (Nginx Server)
          │
-         │ (Port 5000 - WebSocket / REST API Streams)
+         │ (Port 5001 - WebSocket / REST API Streams)
          ▼
   [Backend Container] (Node.js App) ──(Docker Bridge Network)──► [Database Container] (PostgreSQL + pgvector)
          │
@@ -446,7 +446,7 @@ Create a `.env` file at both frontend and backend subdirectories:
 
 ### Backend `.env` Schema:
 ```env
-PORT=5000
+PORT=5001
 NODE_ENV=development
 FRONTEND_URL=http://localhost:5173
 
@@ -483,7 +483,7 @@ SAVE_DEBUG_RECORDINGS=false  # true = persist WAV files to test_recordings/ for 
 
 ### Frontend `.env` Schema:
 ```env
-VITE_API_URL=http://localhost:5000
+VITE_API_URL=http://localhost:5001
 VITE_SENTRY_DSN=your_frontend_sentry_dsn
 ```
 
