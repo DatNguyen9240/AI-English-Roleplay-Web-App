@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { TranscriptDisplay } from '@/features/conversation/components/TranscriptDisplay';
-import { SubtitleDisplay } from '@/features/conversation/components/SubtitleDisplay';
+import React, { useState, useRef, useEffect } from 'react';
 import { RecordingStatus } from 'shared-contracts';
 import { Mic, Volume2, Loader2, AlertCircle, Play, HelpCircle } from 'lucide-react';
+import { ChatMessage } from '@/features/audio-core/hooks/useAudioRecorder';
+import { VoiceVisualizer } from './VoiceVisualizer';
 
 interface AudioDashboardProps {
   isRecording: boolean;
@@ -10,6 +10,7 @@ interface AudioDashboardProps {
   rmsVolume: number;
   transcript: string;
   llmText: string;
+  chatHistory: ChatMessage[];
   currentPlayingSentence?: string;
   highlightedWordIndex?: number;
   startRecording: (topic?: string) => void;
@@ -28,6 +29,7 @@ export function AudioDashboard({
   rmsVolume,
   transcript,
   llmText,
+  chatHistory,
   currentPlayingSentence,
   highlightedWordIndex,
   startRecording,
@@ -36,6 +38,12 @@ export function AudioDashboard({
 }: AudioDashboardProps): React.ReactElement {
   const [topic, setTopic] = useState('');
   const volumePercentage = Math.min(100, Math.round(rmsVolume * 500));
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatHistory, llmText, status]);
 
   const isDisabled = status === 'PROCESSING' || status === 'THINKING' || status === 'SPEAKING';
   const isSessionActive = status !== 'IDLE' && status !== 'ERROR';
@@ -48,7 +56,7 @@ export function AudioDashboard({
     'Start General Conversation';
 
   return (
-    <div className="max-w-4xl w-full bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl flex flex-col transition-all duration-300">
+    <div className="max-w-6xl w-full bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl flex flex-col transition-all duration-300">
       
       {/* App Title Header */}
       <div className="w-full border-b border-slate-800/80 pb-4 mb-6 flex flex-col sm:flex-row justify-between items-center gap-2">
@@ -71,7 +79,7 @@ export function AudioDashboard({
       <div className="w-full flex flex-col sm:flex-row gap-6 items-stretch">
         
         {/* Left Column (State, Volume Visualizer & Connection Controls) */}
-        <div className="w-full sm:w-5/12 bg-slate-950/40 border border-slate-800/60 rounded-2xl p-4 flex flex-col items-center justify-between min-h-[280px] shadow-inner">
+        <div className="w-full sm:w-4/12 bg-slate-950/40 border border-slate-800/60 rounded-2xl p-6 flex flex-col items-center justify-between min-h-[340px] shadow-inner">
           {!isSessionActive ? (
             /* Idle Left: Topic Input & Start */
             <div className="w-full flex flex-col justify-center h-full gap-5">
@@ -100,17 +108,23 @@ export function AudioDashboard({
             </div>
           ) : (
             /* Active Left: Circle Visualizer, Guidance Badge, Volume & Exit Button */
-            <div className="w-full flex flex-col items-center justify-between h-full gap-4">
+            <div className="w-full flex flex-col items-center justify-between h-full gap-5">
               
               {/* FSM State Circle Visualizer */}
               <div className="flex flex-col items-center justify-center mt-2">
-                <div className={`w-24 h-24 rounded-full flex items-center justify-center border-4 transition-all duration-300 ${
-                  status === 'LISTENING'   ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-pulse' :
-                  status === 'PROCESSING' ? 'border-amber-500  shadow-[0_0_15px_rgba(245,158,11,0.3)]  animate-pulse' :
-                  status === 'THINKING'   ? 'border-teal-400   shadow-[0_0_15px_rgba(45,212,191,0.3)]  animate-pulse' :
-                  status === 'SPEAKING'   ? 'border-violet-500 shadow-[0_0_20px_rgba(139,92,246,0.5)] animate-pulse' :
-                  'border-slate-800'
-                }`}>
+                <div
+                  className={`w-24 h-24 rounded-full flex items-center justify-center border-4 transition-all duration-300 ${
+                    status === 'LISTENING'   ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.35)]' :
+                    status === 'PROCESSING' ? 'border-amber-500  shadow-[0_0_15px_rgba(245,158,11,0.3)]  animate-pulse' :
+                    status === 'THINKING'   ? 'border-teal-400   shadow-[0_0_15px_rgba(45,212,191,0.3)]  animate-pulse' :
+                    status === 'SPEAKING'   ? 'border-violet-500 shadow-[0_0_20px_rgba(139,92,246,0.5)]' :
+                    'border-slate-800'
+                  }`}
+                  style={{
+                    transform: status === 'LISTENING' ? `scale(${1 + Math.min(0.2, rmsVolume * 3.5)})` : 'scale(1)',
+                    transition: 'transform 100ms ease-out, border-color 300ms, box-shadow 300ms',
+                  }}
+                >
                   <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-slate-300">
                     {status}
                   </span>
@@ -145,18 +159,13 @@ export function AudioDashboard({
                 )}
               </div>
 
-              {/* Volume Visualizer */}
-              <div className="w-full px-2">
-                <div className="flex justify-between text-[11px] text-slate-400 mb-1 font-mono">
-                  <span>Input Mic Level</span>
+              {/* Real-time Voice Spectrum Analyzer */}
+              <div className="w-full px-2 flex flex-col gap-1.5">
+                <div className="flex justify-between text-[10px] text-slate-400 font-mono tracking-wider uppercase">
+                  <span>Voice Activity</span>
                   <span>{volumePercentage}%</span>
                 </div>
-                <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-75"
-                    style={{ width: `${volumePercentage}%` }}
-                  />
-                </div>
+                <VoiceVisualizer status={status} rmsVolume={rmsVolume} />
               </div>
 
               {/* End Session Button */}
@@ -172,12 +181,12 @@ export function AudioDashboard({
         </div>
 
         {/* Right Column (Dialogue Display, Subtitles, Text Drafting & User Guide) */}
-        <div className="w-full sm:w-7/12 flex flex-col justify-between min-h-[280px]">
+        <div className="w-full sm:w-8/12 flex flex-col justify-between min-h-[340px]">
           {!isSessionActive ? (
             /* Idle Right: Quick Guide Onboard */
-            <div className="w-full bg-slate-950/20 border border-slate-800/40 rounded-2xl p-4 text-left flex flex-col justify-center h-full">
+            <div className="w-full bg-slate-950/20 border border-slate-800/40 rounded-2xl p-6 text-left flex flex-col justify-center h-full">
               <div className="flex items-center gap-1.5 mb-4">
-                <HelpCircle className="w-4 h-4 text-slate-455" />
+                <HelpCircle className="w-4.5 h-4.5 text-slate-400" />
                 <h3 className="text-sm font-bold text-slate-300 font-mono uppercase tracking-wider">
                   How It Works
                 </h3>
@@ -191,29 +200,109 @@ export function AudioDashboard({
               </ul>
             </div>
           ) : (
-            /* Active Right: Transcripts, Subtitles & Text Input */
-            <div className="w-full sm:w-7/12 flex flex-col gap-4 justify-between h-full">
+            /* Active Right: Unified scrolling Conversation History & Text Input */
+            <div className="w-full flex flex-col gap-4 justify-between h-full flex-1">
               
               {/* Message Box Areas */}
-              <div className="flex flex-col gap-3 flex-1 justify-start">
-                {/* User Transcript (STT) */}
-                <div className="w-full max-h-[100px] overflow-y-auto">
-                  <TranscriptDisplay status={status} transcript={transcript} />
-                </div>
+              <div className="flex-1 overflow-y-auto pr-1.5 max-h-[300px] flex flex-col gap-4 min-h-[220px] scroll-smooth">
+                {chatHistory.length === 0 ? (
+                  <div className="text-center text-slate-500 text-xs py-8 italic">
+                    Connection established. Say hello to your AI tutor!
+                  </div>
+                ) : (
+                  chatHistory.map((msg) => {
+                    const isSystem = msg.text.startsWith('[Conversation Topic:');
+                    
+                    if (isSystem) {
+                      const topicMatch = msg.text.match(/\[Conversation Topic:\s*(.*?)\]/);
+                      const topicName = topicMatch ? topicMatch[1] : 'Custom Session';
+                      return (
+                        <div key={msg.id} className="mx-auto my-1 px-4 py-1.5 bg-slate-850/60 border border-slate-800/30 text-slate-400 rounded-full text-xs font-mono tracking-wide flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                          Topic: <span className="text-blue-300 font-semibold">{topicName}</span>
+                        </div>
+                      );
+                    }
 
-                {/* AI Response (LLM streaming) */}
-                <div className="w-full max-h-[150px] overflow-y-auto">
-                  <SubtitleDisplay
-                    status={status}
-                    llmText={llmText}
-                    currentPlayingSentence={currentPlayingSentence}
-                    highlightedWordIndex={highlightedWordIndex}
-                  />
-                </div>
+                    const isUser = msg.sender === 'user';
+                    const isActiveAiMessage = msg.id === 'ai-current';
+
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex flex-col max-w-[85%] ${
+                          isUser ? 'self-end' : 'self-start'
+                        }`}
+                      >
+                        {/* Bubble Header */}
+                        <div className={`text-[10px] text-slate-500 font-mono mb-1 px-1 ${isUser ? 'text-right' : 'text-left'}`}>
+                          {isUser ? 'You' : 'AI Tutor'}
+                        </div>
+
+                        {/* Bubble Body */}
+                        <div
+                          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                            isUser
+                              ? 'bg-gradient-to-br from-blue-600 to-indigo-600 border border-blue-500/20 text-white rounded-tr-none shadow-md shadow-blue-500/5'
+                              : 'bg-slate-800/80 border border-slate-700/55 text-slate-100 rounded-tl-none shadow-sm'
+                          }`}
+                        >
+                          <div className="whitespace-pre-wrap">{msg.text}</div>
+
+                          {/* Karaoke highlighting inside active speaking AI bubble */}
+                          {!isUser && isActiveAiMessage && status === 'SPEAKING' && currentPlayingSentence && (
+                            <div className="mt-3 pt-2.5 border-t border-emerald-500/10 flex flex-col gap-1.5 font-sans">
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                                <span className="text-[10px] text-emerald-400 font-mono uppercase tracking-wider font-bold">Speaking now:</span>
+                              </div>
+                              <div className="text-sm text-slate-350 flex flex-wrap gap-x-1.5 gap-y-0.5 font-light">
+                                {currentPlayingSentence.split(/\s+/).map((word, idx) => {
+                                  const isHighlighted = idx === highlightedWordIndex;
+                                  return (
+                                    <span
+                                      key={idx}
+                                      className={`transition-all duration-150 rounded ${
+                                        isHighlighted
+                                          ? 'text-emerald-350 font-bold bg-emerald-550/25 px-1 scale-105 shadow-sm shadow-emerald-500/20'
+                                          : 'text-slate-300'
+                                      }`}
+                                    >
+                                      {word}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+
+                {/* Thinking/Generating Indicator Bubble */}
+                {(status === 'THINKING' || status === 'PROCESSING') && (
+                  <div className="self-start max-w-[80%] flex flex-col">
+                    <div className="text-[10px] text-slate-500 font-mono mb-1 px-1">AI Tutor</div>
+                    <div className="bg-slate-855/60 border border-slate-800 rounded-2xl rounded-tl-none px-4 py-3.5 flex gap-1.5 items-center shadow-inner">
+                      {[0, 1, 2].map((i) => (
+                        <span
+                          key={i}
+                          className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce"
+                          style={{ animationDelay: `${i * 150}ms` }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Dummy anchor for auto-scroll */}
+                <div ref={messagesEndRef} />
               </div>
 
               {/* Drafting area for typed response */}
-              <div className="w-full border-t border-slate-850 pt-4 mt-auto">
+              <div className="w-full border-t border-slate-800/80 pt-4 mt-auto">
                 <div className="flex justify-between text-[11px] text-slate-400 mb-2 font-mono">
                   <span>Type or Paste Response</span>
                   <span className="text-blue-400 font-sans">Or speak freely via Mic</span>
@@ -232,9 +321,18 @@ export function AudioDashboard({
                 >
                   <textarea
                     name="textInput"
-                    placeholder="Type or paste your English reply here..."
+                    placeholder="Type or paste your English reply here... (Enter to Send)"
                     disabled={status === 'PROCESSING' || status === 'THINKING'}
                     rows={2}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        const form = e.currentTarget.form;
+                        if (form) {
+                          form.requestSubmit();
+                        }
+                      }
+                    }}
                     className="flex-1 px-4 py-2.5 rounded-xl bg-slate-800/85 border border-slate-700 text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-blue-500 transition-colors resize-none"
                   />
                   <button

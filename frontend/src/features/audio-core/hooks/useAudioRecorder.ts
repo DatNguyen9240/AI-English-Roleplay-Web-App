@@ -10,12 +10,20 @@ import { SOCKET_EVENTS, RecordingStatus } from 'shared-contracts';
 const SAMPLES_PER_CHUNK = (audioConfig.targetSampleRate * audioConfig.chunkDurationMs) / 1000;
 const WORKLET_MODULE_URL = '/worklets/audio-capture-processor.worklet.js';
 
+export interface ChatMessage {
+  id: string;
+  sender: 'user' | 'ai';
+  text: string;
+  timestamp: number;
+}
+
 export interface UseAudioRecorderReturn {
   isRecording: boolean;
   status: RecordingStatus;
   rmsVolume: number;
   transcript: string;
   llmText: string;
+  chatHistory: ChatMessage[];
   currentPlayingSentence: string;
   highlightedWordIndex: number;
   startRecording: (topic?: string) => Promise<void>;
@@ -39,6 +47,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [rmsVolume, setRmsVolume] = useState(0);
   const [transcript, setTranscript] = useState('');
   const [llmText, setLlmText] = useState('');
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [currentPlayingSentence, setCurrentPlayingSentence] = useState('');
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
 
@@ -65,6 +74,19 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setHighlightedWordIndex(-1);
 
     streamerRef.current?.sendUserInterrupt();
+
+    // Mark active AI message as interrupted in history
+    setChatHistory((history) =>
+      history.map((msg) =>
+        msg.id === 'ai-current'
+          ? {
+              ...msg,
+              id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              text: msg.text.trim() + '... [interrupted]',
+            }
+          : msg
+      )
+    );
 
     audioBufferQueueRef.current = [];
     sequenceNumberRef.current = 0;
@@ -173,6 +195,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     updateStatus('LISTENING');
     setTranscript('');
     setLlmText('');
+    setChatHistory([]);
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
     
@@ -214,6 +237,17 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
           setHighlightedWordIndex(-1);
           updateStatus('THINKING');
 
+          // Add to chat history
+          setChatHistory((prev) => [
+            ...prev,
+            {
+              id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              sender: 'user',
+              text: text,
+              timestamp: Date.now(),
+            },
+          ]);
+
         // Start LLM timeout watchdog
         llmTimeoutRef.current = setTimeout(() => {
           logger.warn('[LLM] Timeout — no llm-stream-done received');
@@ -222,17 +256,51 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         }, audioConfig.llmTimeoutMs);
       });
 
-      // ── LLM tokens → accumulate into llmText ────────────────────────────
+      // ── LLM tokens → accumulate into llmText and update chatHistory ──────
       streamerRef.current!.on(SOCKET_EVENTS.LLM_STREAM_CHUNK, ({ token }) => {
-        setLlmText((prev) => prev + token);
+        setLlmText((prev) => {
+          const nextText = prev + token;
+
+          setChatHistory((history) => {
+            const lastMsg = history[history.length - 1];
+            if (lastMsg && lastMsg.sender === 'ai' && lastMsg.id === 'ai-current') {
+              return [
+                ...history.slice(0, -1),
+                {
+                  ...lastMsg,
+                  text: nextText,
+                },
+              ];
+            } else {
+              return [
+                ...history,
+                {
+                  id: 'ai-current',
+                  sender: 'ai',
+                  text: token,
+                  timestamp: Date.now(),
+                },
+              ];
+            }
+          });
+
+          return nextText;
+        });
       });
 
       // ── LLM stream done ──────────────────────────────────────────────────
       streamerRef.current!.on(SOCKET_EVENTS.LLM_STREAM_DONE, ({ latencyMs }) => {
         clearTimeout(llmTimeoutRef.current ?? undefined);
         logger.log(`[LLM] Stream done in ${latencyMs}ms`);
-        // Note: Do not disconnect socket immediately here because we need it to continue
-        // receiving tts-audio-chunk packets. Playout manager will notify when finished.
+
+        // Finalize the active AI message ID so it doesn't get appended next turn
+        setChatHistory((history) =>
+          history.map((msg) =>
+            msg.id === 'ai-current'
+              ? { ...msg, id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` }
+              : msg
+          )
+        );
       });
 
       // ── TTS audio chunk → playout ─────────────────────────────────────────
@@ -379,6 +447,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     rmsVolume,
     transcript,
     llmText,
+    chatHistory,
     currentPlayingSentence,
     highlightedWordIndex,
     startRecording,
