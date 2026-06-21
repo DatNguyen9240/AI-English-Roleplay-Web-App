@@ -1,0 +1,13 @@
+{
+  "name": "ai-english-roleplay-web-app",
+  "version": "1.0.0",
+  "description": "Realtime AI English Roleplay Web App",
+  "scripts": {
+    "dev": "npx concurrently \"npm run dev --prefix frontend\" \"npm run dev --prefix backend\"",
+    "db:up": "docker compose up -d db",
+    "docker:dev": "docker compose up --build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
