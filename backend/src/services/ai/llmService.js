@@ -51,10 +51,15 @@ class MockLlmService extends LlmService {
       'Could you tell me a little more about what you enjoy doing on weekends?';
 
     if (systemPrompt) {
-      const topicMatch = systemPrompt.match(/conversation (?:topic is|about): "([^"]+)"/i);
+      const topicMatch = systemPrompt.match(/practice topic is: "([^"]+)"/i);
       if (topicMatch && topicMatch[1]) {
         const topicName = topicMatch[1];
-        mockResponse = `Welcome to our practice session! Let's talk about ${topicName}. What are your thoughts on this topic?`;
+        mockResponse = 
+          `Here is a short overview about "${topicName}": ` +
+          `Lately, ${topicName} has become a very popular topic of discussion around the world. ` +
+          `Many people believe it is highly important for our future and society, while others think it presents many challenges. ` +
+          `Learning to express your opinion on this is a great way to improve your English. ` +
+          `What are your personal thoughts or experiences regarding this topic?`;
       }
     }
 

@@ -370,12 +370,13 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       'USER_SET_SCENARIO_TOPIC'
     );
 
-    // Set custom system prompt for the topic
+    // Set custom system prompt for the topic to generate a short passage first
     session.customSystemPrompt = 
-      `You are a professional AI English conversation partner. The conversation topic is: "${topic}". ` +
-      `Keep your responses extremely concise (2–3 sentences maximum), natural, and conversational. ` +
-      `React to what the user said, then ask a relevant follow-up question related to this topic to keep the conversation flowing. ` +
-      `Never use bullet points or markdown. Speak in plain, friendly English.`;
+      `You are a professional AI English tutor. Today's practice topic is: "${topic}". ` +
+      `Since this is the start of the conversation, you must write a short, engaging passage (around 50-80 words, 4-6 sentences) introducing or describing the topic "${topic}" in plain, friendly English. ` +
+      `After the passage, ask the user what their thoughts or opinions are about this topic to start the discussion. ` +
+      `For all subsequent replies, keep your responses concise (2–3 sentences maximum), react to what the user says, and ask follow-up questions to keep the conversation flowing. ` +
+      `Never use bullet points, list numbers, or markdown formatting. Speak in clear, plain English.`;
 
     try {
       // Transition FSM to processing then thinking
