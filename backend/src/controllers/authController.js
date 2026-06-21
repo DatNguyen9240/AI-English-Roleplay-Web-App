@@ -95,11 +95,9 @@ async function login(req, res) {
 }
 
 async function logout(req, res) {
-  res.clearCookie('token', {
-    httpOnly: COOKIE_OPTIONS.httpOnly,
-    secure: COOKIE_OPTIONS.secure,
-    sameSite: COOKIE_OPTIONS.sameSite,
-  });
+  // Omit maxAge — clearCookie only needs the security flags to match the original Set-Cookie
+  const { maxAge: _omit, ...clearOptions } = COOKIE_OPTIONS;
+  res.clearCookie('token', clearOptions);
   res.json({ success: true });
 }
 

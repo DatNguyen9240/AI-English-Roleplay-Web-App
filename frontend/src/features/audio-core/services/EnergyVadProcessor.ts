@@ -1,29 +1,26 @@
+import type { AudioConfig } from '../../../types/audio';
+
 /**
  * Voice Activity Detector using root-mean-square (RMS) energy analysis.
  * Complies with Section 7.5: Swappable VAD processor pattern.
  */
 export class EnergyVadProcessor {
-  /**
-   * @param {object} config 
-   * @param {number} config.vadVolumeThreshold 
-   * @param {number} config.vadSilenceTimeoutMs 
-   */
-  constructor(config) {
+  private readonly threshold: number;
+  private readonly timeoutMs: number;
+  private speakingActive: boolean = false;
+  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private currentRms: number = 0;
+
+  constructor(config: AudioConfig) {
     this.threshold = config.vadVolumeThreshold;
     this.timeoutMs = config.vadSilenceTimeoutMs;
-    
-    this.speakingActive = false;
-    this.silenceTimer = null;
-    this.currentRms = 0;
   }
 
   /**
-   * Evaluates input audio samples for speech indicators
-   * @param {Float32Array} inputData 
-   * @param {() => void} onSilenceDetected - Triggered on silent pauses
-   * @returns {boolean} Whether speech is actively detected
+   * Evaluates input audio samples for speech activity.
+   * Fires onSilenceDetected after the configured silence timeout.
    */
-  process(inputData, onSilenceDetected) {
+  process(inputData: Float32Array, onSilenceDetected: () => void): boolean {
     let sum = 0;
     for (let i = 0; i < inputData.length; i++) {
       sum += inputData[i] * inputData[i];
@@ -49,18 +46,13 @@ export class EnergyVadProcessor {
     return this.speakingActive;
   }
 
-  /**
-   * Returns current raw volume reading
-   * @returns {number}
-   */
-  getVolume() {
+  /** Returns the current raw RMS volume reading */
+  getVolume(): number {
     return this.currentRms;
   }
 
-  /**
-   * Cleans active timers and resets volume state
-   */
-  reset() {
+  /** Clears active timers and resets all state */
+  reset(): void {
     this.speakingActive = false;
     if (this.silenceTimer) {
       clearTimeout(this.silenceTimer);

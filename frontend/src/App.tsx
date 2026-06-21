@@ -3,28 +3,25 @@ import { useAudioRecorder } from './features/audio-core/hooks/useAudioRecorder';
 import { useAuth } from './features/auth/hooks/useAuth';
 import { AuthForm } from './features/auth/components/AuthForm';
 import { AudioDashboard } from './features/dashboard/components/AudioDashboard';
+import { PageShell } from './components/PageShell';
+import { config } from './config';
 import { LogOut, User, Sparkles } from 'lucide-react';
 
-function App() {
+function App(): React.ReactElement {
   const { user, logout } = useAuth();
-  const {
-    isRecording,
-    status,
-    rmsVolume,
-    startRecording,
-    stopRecording,
-  } = useAudioRecorder(import.meta.env.VITE_API_URL);
+  const { isRecording, status, rmsVolume, transcript, startRecording, stopRecording } =
+    useAudioRecorder(config.apiUrl);
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-900/20 via-slate-950 to-slate-950">
+      <PageShell>
         <AuthForm />
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-900/20 via-slate-950 to-slate-950">
+    <PageShell>
       {/* Top Header */}
       <div className="w-full max-w-md flex justify-between items-center mb-6 px-2">
         <div className="flex items-center gap-2">
@@ -38,7 +35,7 @@ function App() {
         <div className="flex items-center gap-3 bg-slate-900/80 border border-slate-800 rounded-full py-1.5 pl-3.5 pr-1.5 shadow-xl">
           <div className="flex items-center gap-1.5 text-xs text-slate-300 font-medium max-w-[120px] truncate">
             <User className="w-3.5 h-3.5 text-blue-400" />
-            <span className="truncate">{user?.email}</span>
+            <span className="truncate">{user.email}</span>
           </div>
           <button
             onClick={logout}
@@ -54,10 +51,11 @@ function App() {
         isRecording={isRecording}
         status={status}
         rmsVolume={rmsVolume}
+        transcript={transcript}
         startRecording={startRecording}
         stopRecording={stopRecording}
       />
-    </div>
+    </PageShell>
   );
 }
 

@@ -2,27 +2,32 @@ import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { Mail, Lock, LogIn, UserPlus, Loader2, Sparkles } from 'lucide-react';
 
-export function AuthForm({ onSuccess }) {
+interface AuthFormProps {
+  onSuccess?: () => void;
+}
+
+/**
+ * Login / Register form with toggle between modes.
+ * Delegates auth calls to the useAuth Zustand store.
+ */
+export function AuthForm({ onSuccess }: AuthFormProps): React.ReactElement {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { login, register, error, loading, clearError } = useAuth();
 
-  const handleToggle = () => {
+  const handleToggle = (): void => {
     setIsLogin(!isLogin);
     clearError();
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     if (!email || !password) return;
 
-    let success;
-    if (isLogin) {
-      success = await login(email, password);
-    } else {
-      success = await register(email, password);
-    }
+    const success = isLogin
+      ? await login(email, password)
+      : await register(email, password);
 
     if (success && onSuccess) {
       onSuccess();
@@ -32,7 +37,7 @@ export function AuthForm({ onSuccess }) {
   return (
     <div className="w-full max-w-md bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl transition-all duration-300">
       <div className="flex flex-col items-center mb-8">
-        <div className="w-12 h-12 bg-gradient-to-tr from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20 mb-4 animate-bounce-slow">
+        <div className="w-12 h-12 bg-gradient-to-tr from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20 mb-4">
           <Sparkles className="w-6 h-6 text-white" />
         </div>
         <h2 className="text-2xl font-bold tracking-tight text-center bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
@@ -59,6 +64,7 @@ export function AuthForm({ onSuccess }) {
               <Mail className="w-5 h-5" />
             </span>
             <input
+              id="input-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -78,6 +84,7 @@ export function AuthForm({ onSuccess }) {
               <Lock className="w-5 h-5" />
             </span>
             <input
+              id="input-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -89,6 +96,7 @@ export function AuthForm({ onSuccess }) {
         </div>
 
         <button
+          id="btn-auth-submit"
           type="submit"
           disabled={loading}
           className="w-full py-3.5 px-6 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white transition-all duration-200 shadow-lg shadow-blue-500/10 flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
@@ -110,7 +118,7 @@ export function AuthForm({ onSuccess }) {
       </form>
 
       <div className="mt-8 text-center text-sm text-slate-400">
-        {isLogin ? "Don't have an account? " : "Already have an account? "}
+        {isLogin ? "Don't have an account? " : 'Already have an account? '}
         <button
           onClick={handleToggle}
           className="text-blue-400 hover:text-blue-300 font-semibold transition-colors"

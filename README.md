@@ -47,7 +47,7 @@ ai-english-roleplay/
 │   └── src/
 │       ├── controllers/     # REST Controllers (stateless HTTP endpoints like user profile)
 │       ├── routes/          # Express route definitions
-│       ├── middleware/      # Rate-limiting, authentication, body validation
+│       ├── middleware/       # Rate-limiting, authentication, body validation
 │       ├── repositories/    # Database Repository abstraction layer
 │       ├── session/         # Session manager layer (tracks active connections, FSMs, cancellation tokens)
 │       ├── services/        # Services layer
@@ -56,10 +56,21 @@ ai-english-roleplay/
 │       │   └── feedback/    # Pronunciation scoring algorithms
 │       ├── state-machine/   # Finite State Machine implementation for active sessions
 │       ├── sockets/         # WebSocket handlers
-│       └── app.js           # Server initializer
+│       │   └── socketEvents.js  # Socket event name constants (mirrors FE constants/socketEvents.ts)
+│       ├── utils/           # Shared backend utilities
+│       │   └── wavBuilder.js    # PCM16 → WAV file builder (used by storage + STT services)
+│       └── app.js           # Express + Socket.IO setup, exports { app, server }
 ├── frontend/
 │   ├── public/              # Static assets (audio sounds, UI icons)
+│   │   └── worklets/        # AudioWorklet processor scripts (.js — cannot use TS modules)
 │   └── src/
+│       ├── config.ts        # Env var validation — single source of truth for all VITE_ vars
+│       ├── vite-env.d.ts    # Vite client type reference (import.meta.env, CSS imports)
+│       ├── types/           # Shared domain type definitions
+│       │   ├── audio.ts     # RecordingStatus, AudioConfig, socket event payload types
+│       │   └── auth.ts      # AuthUser, AuthState interfaces
+│       ├── components/      # Global layout primitives (not feature-specific)
+│       │   └── PageShell.tsx    # Full-screen background layout wrapper
 │       ├── assets/          # Styles and fonts
 │       ├── context/         # React Context stores (Global Socket state, global Auth state)
 │       ├── features/        # Bounded feature folders
@@ -67,10 +78,11 @@ ai-english-roleplay/
 │       │   ├── dashboard/   # Scenario selection list
 │       │   ├── conversation/# Voice arena components (Avatar, Waveform, Subtitle Karaoke)
 │       │   └── audio-core/  # useAudioRecorder, VAD, mobile Audio policy, Playback Queue Manager
-│       ├── services/        # HTTP client wrappers
+│       │       └── constants/   # socketEvents.ts — event name constants (mirrors BE socketEvents.js)
+│       ├── services/        # HTTP client wrappers (e.g. authApiClient.ts)
 │       ├── utils/           # Buffer converters, time formatters
-│       ├── App.jsx          # Routing configuration
-│       └── main.jsx         # Client entrypoint
+│       ├── App.tsx          # Routing configuration
+│       └── main.tsx         # Client entrypoint
 ```
 
 ### Folder logic principles:
@@ -435,8 +447,16 @@ Create a `.env` file at both frontend and backend subdirectories:
 ### Backend `.env` Schema:
 ```env
 PORT=5000
-DATABASE_URL=postgresql://postgres:password123@localhost:5432/ai_roleplay?schema=public
 NODE_ENV=development
+FRONTEND_URL=http://localhost:5173
+
+# Database
+DATABASE_URL=postgresql://postgres:password123@localhost:5432/ai_roleplay?schema=public
+
+# Auth
+JWT_SECRET=your_jwt_secret_here
+JWT_EXPIRES_IN=7d
+BCRYPT_SALT_ROUNDS=12
 
 # AI API Keys
 OPENROUTER_API_KEY=your_openrouter_key
@@ -444,8 +464,10 @@ DEEPSEEK_API_KEY=your_deepseek_key
 OPENAI_API_KEY=your_openai_key
 
 # TTS/STT Configurations
-TTS_PROVIDER=openai # openai | piper
+TTS_PROVIDER=openai          # openai | piper
 STT_MODEL=base.en
+WHISPER_BINARY_PATH=         # path to compiled whisper main binary (Linux prod)
+WHISPER_MODEL_PATH=          # path to ggml-base.en.bin model file
 VAD_TIMEOUT=1500
 MAX_CONTEXT_MESSAGES=10
 
@@ -455,7 +477,8 @@ LANGFUSE_PUBLIC_KEY=your_langfuse_public
 LANGFUSE_SECRET_KEY=your_langfuse_secret
 
 # Developer Mocks Toggle
-USE_MOCKS=true
+USE_MOCKS=true               # true = mock STT/LLM/TTS (no binaries needed)
+SAVE_DEBUG_RECORDINGS=false  # true = persist WAV files to test_recordings/ for review
 ```
 
 ### Frontend `.env` Schema:
@@ -493,26 +516,27 @@ Given the asynchronous nature of voice streams, testing focuses on state transit
 ## 17. Engineering Execution Roadmap
 
 ```text
-Phase 1: Audio Pipeline Validation (MUST STABILIZE FIRST)
+Phase 1: Audio Pipeline Validation ✅ COMPLETE
 ├── Frontend (Client):
-│   ├── Capture getUserMedia microphone stream
-│   ├── Initialize raw AudioContext and ScriptProcessor/AudioWorklet
-│   ├── Convert Float32 native buffer to Int16 PCM (16kHz Mono)
-│   └── Implement silence threshold VAD detector
+│   ├── ✅ Capture getUserMedia microphone stream
+│   ├── ✅ Initialize raw AudioContext and AudioWorklet
+│   ├── ✅ Convert Float32 native buffer to Int16 PCM (16kHz Mono)
+│   └── ✅ Implement silence threshold VAD detector (EnergyVadProcessor)
 └── Backend (Server):
-    ├── Setup Express server + Socket.IO receiver
-    ├── Stream raw binary buffers from Client to Server
-    └── Log chunks metrics (Sequence counts, chunk buffer size) and dump to file
+    ├── ✅ Setup Express server + Socket.IO receiver
+    ├── ✅ Stream raw binary buffers from Client to Server
+    └── ✅ Log chunks metrics (Sequence counts, chunk buffer size)
 
-Phase 2: Database & Handshake setup
-├── Setup PostgreSQL + pgvector Docker container
-├── Build Prisma schema and run migrations
-└── Setup WebSocket Auth handshake validations (JWT)
+Phase 2: Database & Handshake setup ✅ COMPLETE
+├── ✅ Setup PostgreSQL + pgvector Docker container
+├── ✅ Build Prisma schema and run migrations
+└── ✅ Setup WebSocket Auth handshake validations (JWT httpOnly cookie)
 
-Phase 3: Backend STT Integration (Whisper)
-├── Setup whisper.cpp binary locally inside backend container
-├── Pipe incoming socket buffers into Whisper inference process
-└── Emit 'stt-completed' to client
+Phase 3: Backend STT Integration (Whisper) ✅ COMPLETE
+├── ✅ MockSttService for local development (no binary required)
+├── ✅ WhisperSttService for production (whisper.cpp binary)
+├── ✅ Pipe incoming socket buffers into Whisper inference process
+└── ✅ Emit 'stt-completed' to client → TranscriptDisplay component
 
 Phase 4: LLM Stream & Token Aggregator
 ├── Connect OpenRouter / DeepSeek API stream

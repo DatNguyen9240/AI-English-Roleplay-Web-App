@@ -1,0 +1,78 @@
+import { io, Socket } from 'socket.io-client';
+import { SOCKET_EVENTS } from '../constants/socketEvents';
+import type { SttCompletedPayload, SessionErrorPayload } from '../../../types/audio';
+
+interface StreamerOptions {
+  onConnect?: () => void;
+  onConnectError?: (err: Error) => void;
+  onDisconnect?: (reason: string) => void;
+}
+
+/**
+ * Map of typed server → client events.
+ * Keys are derived from SOCKET_EVENTS constants via computed property syntax,
+ * so renaming a constant here automatically narrows the type.
+ */
+type ServerEvents = {
+  [SOCKET_EVENTS.STT_COMPLETED]: (payload: SttCompletedPayload) => void;
+  [SOCKET_EVENTS.SESSION_ERROR]: (payload: SessionErrorPayload) => void;
+};
+
+/**
+ * WebSocket streaming provider using Socket.IO.
+ * Complies with Section 7.5: Swappable network interface pattern.
+ */
+export class SocketIOStreamer {
+  private socket: Socket | null = null;
+
+  /**
+   * Establishes socket connection and maps lifecycle callbacks.
+   * Safely disconnects any previous socket before creating a new one.
+   */
+  connect(socketUrl: string, options: StreamerOptions = {}): void {
+    if (this.socket) {
+      this.disconnect();
+    }
+
+    this.socket = io(socketUrl, {
+      transports: ['websocket'],
+      withCredentials: true,
+    });
+
+    if (options.onConnect)      this.socket.on('connect',       options.onConnect);
+    if (options.onConnectError) this.socket.on('connect_error', options.onConnectError);
+    if (options.onDisconnect)   this.socket.on('disconnect',    options.onDisconnect);
+  }
+
+  /** Subscribes to a typed server-emitted event */
+  on<K extends keyof ServerEvents>(event: K, handler: ServerEvents[K]): void {
+    if (this.socket) {
+      // Cast socket to avoid socket.io-client's complex FallbackToUntypedListener type.
+      // Type safety is enforced at the call-site via the ServerEvents generic.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (this.socket as any).on(event, handler);
+    }
+  }
+
+  /** Emits a raw PCM audio chunk to the server */
+  sendChunk(sequenceNumber: number, pcmBuffer: ArrayBuffer): void {
+    if (this.socket?.connected) {
+      this.socket.emit(SOCKET_EVENTS.AUDIO_CHUNK, { sequenceNumber, chunk: pcmBuffer });
+    }
+  }
+
+  /** Signals the server that voice activity has ceased */
+  sendSpeechEnd(): void {
+    if (this.socket?.connected) {
+      this.socket.emit(SOCKET_EVENTS.SPEECH_END);
+    }
+  }
+
+  /** Disconnects and clears the socket reference */
+  disconnect(): void {
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+  }
+}
