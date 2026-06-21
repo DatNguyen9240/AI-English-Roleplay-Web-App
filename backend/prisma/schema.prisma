@@ -1,7 +1,7 @@
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [pgvector]
+  extensions = [pgvector(map: "vector")]
 }
 
 generator client {
