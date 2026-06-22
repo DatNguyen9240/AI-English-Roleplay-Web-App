@@ -76,18 +76,12 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     }
   }, []);
 
-  const [useBrowserStt, setUseBrowserStt] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('use_browser_stt');
-      return stored === 'true';
-    }
-    return false;
-  });
+  const [useBrowserStt, setUseBrowserStt] = useState<boolean>(true);
 
-  const toggleBrowserStt = useCallback((val: boolean) => {
-    setUseBrowserStt(val);
+  const toggleBrowserStt = useCallback((_val: boolean) => {
+    setUseBrowserStt(true);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('use_browser_stt', String(val));
+      localStorage.setItem('use_browser_stt', 'true');
     }
   }, []);
 
