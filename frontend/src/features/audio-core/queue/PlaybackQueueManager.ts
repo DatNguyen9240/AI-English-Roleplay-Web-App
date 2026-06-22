@@ -30,6 +30,8 @@ export class PlaybackQueueManager {
   private isPlaying: boolean = false;
   private lastRequestId: string | null = null;
 
+  public useBrowserTts: boolean = false;
+
   public onWordSpoken?: (
     wordText: string,
     wordIndex: number,
@@ -108,6 +110,11 @@ export class PlaybackQueueManager {
    * Decodes PCM ArrayBuffer to AudioBuffer and schedules it in AudioContext.
    */
   private playChunk(chunk: PlaybackChunk): void {
+    if (this.useBrowserTts) {
+      this.playChunkBrowserTts(chunk);
+      return;
+    }
+
     try {
       const float32Data = this.convertInt16ToFloat32(chunk.audio);
       
@@ -190,6 +197,90 @@ export class PlaybackQueueManager {
   }
 
   /**
+   * Speaks the sentence chunk using browser's speechSynthesis API (Free).
+   */
+  private playChunkBrowserTts(chunk: PlaybackChunk): void {
+    try {
+      const sentenceText = chunk.words.map((w) => w.text).join(' ');
+
+      // Create SpeechSynthesisUtterance
+      const utterance = new SpeechSynthesisUtterance(sentenceText);
+      utterance.lang = 'en-US';
+
+      // Try to get a high quality English voice
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        const voices = window.speechSynthesis.getVoices();
+        const englishVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Natural'))
+          || voices.find(v => v.lang.startsWith('en') && v.localService)
+          || voices.find(v => v.lang.startsWith('en'));
+        if (englishVoice) {
+          utterance.voice = englishVoice;
+        }
+      }
+
+      utterance.onstart = () => {
+        logger.log(`[BrowserTTS] Playback started: "${sentenceText}"`);
+        if (this.onSentenceStart) {
+          this.onSentenceStart(sentenceText, chunk.requestId);
+        }
+      };
+
+      utterance.onboundary = (event) => {
+        if (event.name === 'word') {
+          let charCount = 0;
+          let wordIndex = -1;
+
+          for (let i = 0; i < chunk.words.length; i++) {
+            const word = chunk.words[i].text;
+            const index = sentenceText.indexOf(word, charCount);
+            if (index !== -1 && event.charIndex >= index && event.charIndex < index + word.length + 2) {
+              wordIndex = i;
+              break;
+            }
+            if (index !== -1) {
+              charCount = index + word.length;
+            }
+          }
+
+          if (wordIndex !== -1 && this.onWordSpoken) {
+            this.onWordSpoken(chunk.words[wordIndex].text, wordIndex, sentenceText, chunk.words, chunk.requestId);
+          }
+        }
+      };
+
+      utterance.onend = () => {
+        logger.log(`[BrowserTTS] Playback finished: "${sentenceText}"`);
+        this.expectedSequenceNumber++;
+
+        if (this.jitterBuffer.length === 0 && this.onQueueEmpty) {
+          this.isPlaying = false;
+          this.onQueueEmpty(chunk.requestId);
+        } else {
+          this.processQueue();
+        }
+      };
+
+      utterance.onerror = (err) => {
+        logger.error('[BrowserTTS] Speech synthesis error:', err);
+        this.expectedSequenceNumber++;
+
+        if (this.jitterBuffer.length === 0 && this.onQueueEmpty) {
+          this.isPlaying = false;
+          this.onQueueEmpty(chunk.requestId);
+        } else {
+          this.processQueue();
+        }
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      logger.error('[BrowserTTS] Failed to execute speak:', err);
+      this.expectedSequenceNumber++;
+      this.processQueue();
+    }
+  }
+
+  /**
    * Helper to convert 16-bit Int16 PCM array to Float32Array (-1.0 to 1.0)
    */
   private convertInt16ToFloat32(arrayBuffer: ArrayBuffer): Float32Array {
@@ -208,6 +299,11 @@ export class PlaybackQueueManager {
    */
   public stop(): void {
     this.isPlaying = false;
+
+    // Cancel any browser speech synthesis
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
     
     // Stop all active audio sources
     for (const source of this.activeSources) {

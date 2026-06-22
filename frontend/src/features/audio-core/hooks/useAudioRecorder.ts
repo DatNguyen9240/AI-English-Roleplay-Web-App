@@ -29,6 +29,8 @@ export interface UseAudioRecorderReturn {
   startRecording: (topic?: string) => Promise<void>;
   stopRecording: () => void;
   sendTextMessage: (text: string) => void;
+  useBrowserTts: boolean;
+  toggleBrowserTts: (val: boolean) => void;
 }
 
 /**
@@ -50,6 +52,23 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [currentPlayingSentence, setCurrentPlayingSentence] = useState('');
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
+
+  const [useBrowserTts, setUseBrowserTts] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('use_browser_tts') === 'true';
+    }
+    return false;
+  });
+
+  const toggleBrowserTts = useCallback((val: boolean) => {
+    setUseBrowserTts(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('use_browser_tts', String(val));
+    }
+    if (playoutQueueRef.current) {
+      playoutQueueRef.current.useBrowserTts = val;
+    }
+  }, []);
 
   const statusRef = useRef<RecordingStatus>('IDLE');
   useEffect(() => {
@@ -346,6 +365,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
 
       // Initialize Playout Queue Manager for the current session
       const queue = new PlaybackQueueManager(audioContext);
+      queue.useBrowserTts = useBrowserTts;
       queue.onSentenceStart = (sentenceText) => {
         setCurrentPlayingSentence(sentenceText);
         setHighlightedWordIndex(-1);
@@ -451,5 +471,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     startRecording,
     stopRecording,
     sendTextMessage,
+    useBrowserTts,
+    toggleBrowserTts,
   };
 }

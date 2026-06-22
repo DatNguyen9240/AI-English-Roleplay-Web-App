@@ -21,6 +21,8 @@ function App(): React.ReactElement {
     startRecording,
     stopRecording,
     sendTextMessage,
+    useBrowserTts,
+    toggleBrowserTts,
   } = useAudioRecorder(config.apiUrl);
 
   if (!user) {
@@ -70,6 +72,8 @@ function App(): React.ReactElement {
         startRecording={startRecording}
         stopRecording={stopRecording}
         sendTextMessage={sendTextMessage}
+        useBrowserTts={useBrowserTts}
+        toggleBrowserTts={toggleBrowserTts}
       />
     </PageShell>
   );

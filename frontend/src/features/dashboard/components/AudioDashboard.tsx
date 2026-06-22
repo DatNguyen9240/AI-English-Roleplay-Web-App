@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { RecordingStatus } from 'shared-contracts';
-import { Mic, Volume2, Loader2, AlertCircle, Play, HelpCircle } from 'lucide-react';
+import { Mic, Volume2, Loader2, Play, HelpCircle } from 'lucide-react';
 import { ChatMessage } from '@/features/audio-core/hooks/useAudioRecorder';
 import { VoiceVisualizer } from './VoiceVisualizer';
 
@@ -16,6 +16,8 @@ interface AudioDashboardProps {
   startRecording: (topic?: string) => void;
   stopRecording: () => void;
   sendTextMessage: (text: string) => void;
+  useBrowserTts: boolean;
+  toggleBrowserTts: (val: boolean) => void;
 }
 
 /**
@@ -24,10 +26,8 @@ interface AudioDashboardProps {
  * Updated: Redesigned into a premium, responsive side-by-side layout (horizontal split) on desktop.
  */
 export function AudioDashboard({
-  isRecording,
   status,
   rmsVolume,
-  transcript,
   llmText,
   chatHistory,
   currentPlayingSentence,
@@ -35,6 +35,8 @@ export function AudioDashboard({
   startRecording,
   stopRecording,
   sendTextMessage,
+  useBrowserTts,
+  toggleBrowserTts,
 }: AudioDashboardProps): React.ReactElement {
   const [topic, setTopic] = useState('');
   const volumePercentage = Math.min(100, Math.round(rmsVolume * 500));
@@ -68,11 +70,25 @@ export function AudioDashboard({
             Practice spoken English with an interactive AI tutor.
           </p>
         </div>
-        {isSessionActive && (
-          <div className="text-xs px-3 py-1 bg-slate-800 border border-slate-700 text-slate-350 font-mono rounded-full uppercase tracking-wider">
-            Active Session
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 cursor-pointer bg-slate-800/80 border border-slate-700/80 px-3.5 py-1.5 rounded-full select-none hover:bg-slate-700/80 transition-colors shadow-inner">
+            <input
+              type="checkbox"
+              checked={useBrowserTts}
+              onChange={(e) => toggleBrowserTts(e.target.checked)}
+              className="w-3.5 h-3.5 rounded text-blue-500 bg-slate-900 border-slate-700 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
+            />
+            <span className="text-[11px] font-semibold text-slate-300 font-sans tracking-wide">
+              Browser TTS (Free Voice)
+            </span>
+          </label>
+
+          {isSessionActive && (
+            <div className="text-xs px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-350 font-mono rounded-full uppercase tracking-wider">
+              Active Session
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Grid: Left and Right Columns */}
