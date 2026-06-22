@@ -31,6 +31,9 @@ export interface UseAudioRecorderReturn {
   sendTextMessage: (text: string) => void;
   useBrowserTts: boolean;
   toggleBrowserTts: (val: boolean) => void;
+  isAutoMic: boolean;
+  toggleAutoMic: (val: boolean) => void;
+  startMicManual: () => Promise<void>;
 }
 
 /**
@@ -68,6 +71,26 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     }
     if (playoutQueueRef.current) {
       playoutQueueRef.current.useBrowserTts = val;
+    }
+  }, []);
+
+  const [isAutoMic, setIsAutoMic] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('is_auto_mic');
+      return stored === null ? true : stored === 'true';
+    }
+    return true;
+  });
+
+  const isAutoMicRef = useRef(isAutoMic);
+  useEffect(() => {
+    isAutoMicRef.current = isAutoMic;
+  }, [isAutoMic]);
+
+  const toggleAutoMic = useCallback((val: boolean) => {
+    setIsAutoMic(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('is_auto_mic', String(val));
     }
   }, []);
 
@@ -210,6 +233,90 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const startMicCapture = useCallback(async (audioContext: AudioContext) => {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+    mediaStreamRef.current = stream;
+
+    await audioContext.audioWorklet.addModule(WORKLET_MODULE_URL);
+    const workletNode = new AudioWorkletNode(audioContext, 'audio-capture-processor');
+    workletNodeRef.current = workletNode;
+
+    audioInputRef.current = audioContext.createMediaStreamSource(stream);
+    audioInputRef.current.connect(workletNode);
+    workletNode.connect(audioContext.destination);
+
+    workletNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
+      const inputData = event.data;
+      const currentStatus = statusRef.current;
+
+      // 1. Interruption Check (during SPEAKING state)
+      if (currentStatus === 'SPEAKING') {
+        const volume = vadProcessorRef.current?.updateVolume(inputData) ?? 0;
+        const interruptionThreshold = audioConfig.interruptionVolumeThreshold;
+        if (volume > interruptionThreshold) {
+          logger.log(`[useAudioRecorder] Interruption detected. Volume: ${volume.toFixed(3)} (Threshold: ${interruptionThreshold.toFixed(3)})`);
+          triggerInterruptionRef.current();
+          return;
+        }
+      }
+
+      // 2. Silence detection & Audio streaming (only in LISTENING state)
+      if (currentStatus === 'LISTENING') {
+        vadProcessorRef.current?.process(inputData, () => {
+          logger.log('[VAD] Silence detected — triggering speech-end');
+          stopRecordingRef.current();
+        });
+
+        const downsampled = downsampleBuffer(
+          inputData,
+          audioContext.sampleRate,
+          audioConfig.targetSampleRate
+        );
+
+        audioBufferQueueRef.current.push(...downsampled);
+
+        while (audioBufferQueueRef.current.length >= SAMPLES_PER_CHUNK) {
+          const chunk = audioBufferQueueRef.current.splice(0, SAMPLES_PER_CHUNK);
+          const pcm16 = convertFloat32ToInt16(new Float32Array(chunk));
+          streamerRef.current?.sendChunk(sequenceNumberRef.current++, pcm16);
+        }
+      }
+
+      // 3. Update volume visualizer
+      const now = performance.now();
+      if (now - lastVolumeUpdateRef.current > 33) {
+        setRmsVolume(vadProcessorRef.current?.getVolume() ?? 0);
+        lastVolumeUpdateRef.current = now;
+      }
+    };
+  }, []);
+
+  const startMicManual = useCallback(async () => {
+    setIsRecording(true);
+    updateStatus('LISTENING');
+
+    try {
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        audioContextRef.current = new window.AudioContext();
+      }
+      const audioContext = audioContextRef.current;
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+
+      await startMicCapture(audioContext);
+    } catch (err) {
+      logger.error('[Manual Mic] Failed to start:', err);
+      updateStatus('ERROR');
+    }
+  }, [startMicCapture, updateStatus]);
+
   const startRecording = useCallback(async (topic?: string): Promise<void> => {
     setIsRecording(true);
     updateStatus('LISTENING');
@@ -347,15 +454,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         playoutQueueRef.current?.stop();
       });
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-      mediaStreamRef.current = stream;
-
       if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
         audioContextRef.current = new window.AudioContext();
       }
@@ -376,66 +474,21 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         setHighlightedWordIndex(index);
       };
       queue.onQueueEmpty = () => {
-        logger.log('[useAudioRecorder] Playout queue empty. Turn complete, auto-transitioning to LISTENING');
+        logger.log('[useAudioRecorder] Playout queue empty. Turn complete');
         setCurrentPlayingSentence('');
         setHighlightedWordIndex(-1);
-        setIsRecording(true);
-        updateStatus('LISTENING');
+        
+        if (isAutoMicRef.current) {
+          setIsRecording(true);
+          updateStatus('LISTENING');
+        } else {
+          stopAudioRef.current();
+          updateStatus('IDLE');
+        }
       };
       playoutQueueRef.current = queue;
 
-      await audioContext.audioWorklet.addModule(WORKLET_MODULE_URL);
-      const workletNode = new AudioWorkletNode(audioContext, 'audio-capture-processor');
-      workletNodeRef.current = workletNode;
-
-      audioInputRef.current = audioContext.createMediaStreamSource(stream);
-      audioInputRef.current.connect(workletNode);
-      workletNode.connect(audioContext.destination);
-
-      workletNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
-        const inputData = event.data;
-        const currentStatus = statusRef.current;
-
-        // 1. Interruption Check (during SPEAKING state)
-        if (currentStatus === 'SPEAKING') {
-          const volume = vadProcessorRef.current?.updateVolume(inputData) ?? 0;
-          const interruptionThreshold = audioConfig.interruptionVolumeThreshold;
-          if (volume > interruptionThreshold) {
-            logger.log(`[useAudioRecorder] Interruption detected. Volume: ${volume.toFixed(3)} (Threshold: ${interruptionThreshold.toFixed(3)})`);
-            triggerInterruptionRef.current();
-            return;
-          }
-        }
-
-        // 2. Silence detection & Audio streaming (only in LISTENING state)
-        if (currentStatus === 'LISTENING') {
-          vadProcessorRef.current?.process(inputData, () => {
-            logger.log('[VAD] Silence detected — triggering speech-end');
-            stopRecordingRef.current();
-          });
-
-          const downsampled = downsampleBuffer(
-            inputData,
-            audioContext.sampleRate,
-            audioConfig.targetSampleRate
-          );
-
-          audioBufferQueueRef.current.push(...downsampled);
-
-          while (audioBufferQueueRef.current.length >= SAMPLES_PER_CHUNK) {
-            const chunk = audioBufferQueueRef.current.splice(0, SAMPLES_PER_CHUNK);
-            const pcm16 = convertFloat32ToInt16(new Float32Array(chunk));
-            streamerRef.current?.sendChunk(sequenceNumberRef.current++, pcm16);
-          }
-        }
-
-        // 3. Update volume visualizer
-        const now = performance.now();
-        if (now - lastVolumeUpdateRef.current > 33) {
-          setRmsVolume(vadProcessorRef.current?.getVolume() ?? 0);
-          lastVolumeUpdateRef.current = now;
-        }
-      };
+      await startMicCapture(audioContext);
     } catch (err) {
       logger.error('[Audio] Failed to start recording:', err);
       updateStatus('ERROR');
@@ -474,5 +527,8 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     sendTextMessage,
     useBrowserTts,
     toggleBrowserTts,
+    isAutoMic,
+    toggleAutoMic,
+    startMicManual,
   };
 }

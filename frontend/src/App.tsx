@@ -23,6 +23,9 @@ function App(): React.ReactElement {
     sendTextMessage,
     useBrowserTts,
     toggleBrowserTts,
+    isAutoMic,
+    toggleAutoMic,
+    startMicManual,
   } = useAudioRecorder(config.apiUrl);
 
   if (!user) {
@@ -74,6 +77,9 @@ function App(): React.ReactElement {
         sendTextMessage={sendTextMessage}
         useBrowserTts={useBrowserTts}
         toggleBrowserTts={toggleBrowserTts}
+        isAutoMic={isAutoMic}
+        toggleAutoMic={toggleAutoMic}
+        startMicManual={startMicManual}
       />
     </PageShell>
   );

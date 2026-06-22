@@ -18,6 +18,9 @@ interface AudioDashboardProps {
   sendTextMessage: (text: string) => void;
   useBrowserTts: boolean;
   toggleBrowserTts: (val: boolean) => void;
+  isAutoMic: boolean;
+  toggleAutoMic: (val: boolean) => void;
+  startMicManual: () => void;
 }
 
 /**
@@ -37,6 +40,9 @@ export function AudioDashboard({
   sendTextMessage,
   useBrowserTts,
   toggleBrowserTts,
+  isAutoMic,
+  toggleAutoMic,
+  startMicManual,
 }: AudioDashboardProps): React.ReactElement {
   const [topic, setTopic] = useState('');
   const volumePercentage = Math.min(100, Math.round(rmsVolume * 500));
@@ -48,7 +54,7 @@ export function AudioDashboard({
   }, [chatHistory, llmText, status]);
 
   const isDisabled = status === 'PROCESSING' || status === 'THINKING' || status === 'SPEAKING';
-  const isSessionActive = status !== 'IDLE' && status !== 'ERROR';
+  const isSessionActive = chatHistory.length > 0 || (status !== 'IDLE' && status !== 'ERROR');
 
   const startButtonLabel =
     status === 'ERROR'      ? 'Retry' :
@@ -70,7 +76,7 @@ export function AudioDashboard({
             Practice spoken English with an interactive AI tutor.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <label className="flex items-center gap-2 cursor-pointer bg-slate-800/80 border border-slate-700/80 px-3.5 py-1.5 rounded-full select-none hover:bg-slate-700/80 transition-colors shadow-inner">
             <input
               type="checkbox"
@@ -83,8 +89,20 @@ export function AudioDashboard({
             </span>
           </label>
 
+          <label className="flex items-center gap-2 cursor-pointer bg-slate-800/80 border border-slate-700/80 px-3.5 py-1.5 rounded-full select-none hover:bg-slate-700/80 transition-colors shadow-inner">
+            <input
+              type="checkbox"
+              checked={isAutoMic}
+              onChange={(e) => toggleAutoMic(e.target.checked)}
+              className="w-3.5 h-3.5 rounded text-blue-500 bg-slate-900 border-slate-700 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
+            />
+            <span className="text-[11px] font-semibold text-slate-300 font-sans tracking-wide">
+              Auto-mic (Tự động mở Mic)
+            </span>
+          </label>
+
           {isSessionActive && (
-            <div className="text-xs px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-350 font-mono rounded-full uppercase tracking-wider">
+            <div className="text-xs px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-350 font-mono rounded-full uppercase tracking-wider text-center">
               Active Session
             </div>
           )}
@@ -172,6 +190,15 @@ export function AudioDashboard({
                     <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />
                     Processing Voice...
                   </div>
+                )}
+                {status === 'IDLE' && (
+                  <button
+                    onClick={startMicManual}
+                    className="w-full py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all shadow-lg shadow-emerald-500/10 focus:outline-none text-sm animate-pulse flex items-center justify-center gap-2"
+                  >
+                    <Mic className="w-4 h-4 text-white" />
+                    Tap to Speak (Nhấn để nói)
+                  </button>
                 )}
               </div>
 

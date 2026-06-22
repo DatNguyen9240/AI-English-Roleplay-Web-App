@@ -31,6 +31,7 @@ export class PlaybackQueueManager {
   private lastRequestId: string | null = null;
 
   public useBrowserTts: boolean = false;
+  private isSpeakingBrowserTts: boolean = false;
 
   public onWordSpoken?: (
     wordText: string,
@@ -71,6 +72,17 @@ export class PlaybackQueueManager {
    */
   private processQueue(): void {
     if (!this.isPlaying) return;
+
+    if (this.useBrowserTts) {
+      if (this.isSpeakingBrowserTts) return; // Wait for current utterance to finish
+
+      if (this.jitterBuffer.length > 0 && this.jitterBuffer[0].sequenceNumber === this.expectedSequenceNumber) {
+        const nextChunk = this.jitterBuffer.shift()!;
+        this.isSpeakingBrowserTts = true;
+        this.playChunk(nextChunk);
+      }
+      return;
+    }
 
     // Clear any pending jitter timeout since we are processing
     if (this.jitterTimeout) {
@@ -250,6 +262,7 @@ export class PlaybackQueueManager {
 
       utterance.onend = () => {
         logger.log(`[BrowserTTS] Playback finished: "${sentenceText}"`);
+        this.isSpeakingBrowserTts = false;
         this.expectedSequenceNumber++;
 
         if (this.jitterBuffer.length === 0 && this.onQueueEmpty) {
@@ -262,6 +275,7 @@ export class PlaybackQueueManager {
 
       utterance.onerror = (err) => {
         logger.error('[BrowserTTS] Speech synthesis error:', err);
+        this.isSpeakingBrowserTts = false;
         this.expectedSequenceNumber++;
 
         if (this.jitterBuffer.length === 0 && this.onQueueEmpty) {
@@ -275,6 +289,7 @@ export class PlaybackQueueManager {
       window.speechSynthesis.speak(utterance);
     } catch (err) {
       logger.error('[BrowserTTS] Failed to execute speak:', err);
+      this.isSpeakingBrowserTts = false;
       this.expectedSequenceNumber++;
       this.processQueue();
     }
@@ -299,6 +314,7 @@ export class PlaybackQueueManager {
    */
   public stop(): void {
     this.isPlaying = false;
+    this.isSpeakingBrowserTts = false;
 
     // Cancel any browser speech synthesis
     if (typeof window !== 'undefined' && window.speechSynthesis) {
