@@ -387,8 +387,13 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   }, [startMicCapture, updateStatus]);
 
   const startRecording = useCallback(async (topic?: string): Promise<void> => {
-    setIsRecording(true);
-    updateStatus('LISTENING');
+    if (isAutoMic) {
+      setIsRecording(true);
+      updateStatus('LISTENING');
+    } else {
+      setIsRecording(false);
+      updateStatus('THINKING');
+    }
     setTranscript('');
     setLlmText('');
     setChatHistory([]);
@@ -563,14 +568,16 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       };
       playoutQueueRef.current = queue;
 
-      await startMicCapture(audioContext);
+      if (isAutoMic) {
+        await startMicCapture(audioContext);
+      }
     } catch (err) {
       logger.error('[Audio] Failed to start recording:', err);
       updateStatus('ERROR');
       stopAudioRef.current();
       streamerRef.current?.disconnect();
     }
-  }, [socketUrl, updateStatus]);
+  }, [socketUrl, updateStatus, isAutoMic, startMicCapture]);
 
   const sendTextMessage = useCallback((text: string): void => {
     if (!text.trim()) return;
