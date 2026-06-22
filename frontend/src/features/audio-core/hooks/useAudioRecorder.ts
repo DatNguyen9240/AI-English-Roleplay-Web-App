@@ -31,8 +31,6 @@ export interface UseAudioRecorderReturn {
   sendTextMessage: (text: string) => void;
   useBrowserTts: boolean;
   toggleBrowserTts: (val: boolean) => void;
-  isAutoMic: boolean;
-  toggleAutoMic: (val: boolean) => void;
   startMicManual: () => Promise<void>;
   resetSession: () => void;
   ttsVoiceName: string | null;
@@ -82,25 +80,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     }
   }, []);
 
-  const [isAutoMic, setIsAutoMic] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('is_auto_mic');
-      return stored === null ? true : stored === 'true';
-    }
-    return true;
-  });
-
-  const isAutoMicRef = useRef(isAutoMic);
-  useEffect(() => {
-    isAutoMicRef.current = isAutoMic;
-  }, [isAutoMic]);
-
-  const toggleAutoMic = useCallback((val: boolean) => {
-    setIsAutoMic(val);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('is_auto_mic', String(val));
-    }
-  }, []);
 
   const [ttsVoiceName, setTtsVoiceName] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
@@ -267,10 +246,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     updateStatus('PROCESSING');
     streamerRef.current?.sendSpeechEnd();
 
-    // If auto-mic is disabled, close the microphone stream immediately to avoid listening during AI turn
-    if (!isAutoMicRef.current) {
-      stopAudio();
-    }
+    stopAudio();
 
     sttTimeoutRef.current = setTimeout(() => {
       logger.warn('[STT] Timeout — no stt-completed received');
@@ -389,13 +365,8 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   }, [startMicCapture, updateStatus]);
 
   const startRecording = useCallback(async (topic?: string): Promise<void> => {
-    if (isAutoMic) {
-      setIsRecording(true);
-      updateStatus('LISTENING');
-    } else {
-      setIsRecording(false);
-      updateStatus('THINKING');
-    }
+    setIsRecording(false);
+    updateStatus('THINKING');
     setTranscript('');
     setLlmText('');
     setChatHistory([]);
@@ -567,26 +538,17 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
           )
         );
 
-        if (isAutoMicRef.current) {
-          setIsRecording(true);
-          updateStatus('LISTENING');
-        } else {
-          stopAudioRef.current();
-          updateStatus('IDLE');
-        }
+        stopAudioRef.current();
+        updateStatus('IDLE');
       };
       playoutQueueRef.current = queue;
-
-      if (isAutoMic) {
-        await startMicCapture(audioContext);
-      }
     } catch (err) {
       logger.error('[Audio] Failed to start recording:', err);
       updateStatus('ERROR');
       stopAudioRef.current();
       streamerRef.current?.disconnect();
     }
-  }, [socketUrl, updateStatus, isAutoMic, startMicCapture]);
+  }, [socketUrl, updateStatus, startMicCapture]);
 
   const sendTextMessage = useCallback((text: string): void => {
     if (!text.trim()) return;
@@ -629,8 +591,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     sendTextMessage,
     useBrowserTts,
     toggleBrowserTts,
-    isAutoMic,
-    toggleAutoMic,
     startMicManual,
     resetSession,
     ttsVoiceName,

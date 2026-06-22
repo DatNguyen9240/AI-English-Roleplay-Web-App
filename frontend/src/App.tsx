@@ -23,8 +23,6 @@ function App(): React.ReactElement {
     sendTextMessage,
     useBrowserTts,
     toggleBrowserTts,
-    isAutoMic,
-    toggleAutoMic,
     startMicManual,
     resetSession,
     ttsVoiceName,
@@ -84,8 +82,6 @@ function App(): React.ReactElement {
         sendTextMessage={sendTextMessage}
         useBrowserTts={useBrowserTts}
         toggleBrowserTts={toggleBrowserTts}
-        isAutoMic={isAutoMic}
-        toggleAutoMic={toggleAutoMic}
         startMicManual={startMicManual}
         resetSession={resetSession}
         ttsVoiceName={ttsVoiceName}
