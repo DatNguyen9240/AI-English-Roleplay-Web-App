@@ -55,9 +55,10 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
 
   const [useBrowserTts, setUseBrowserTts] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('use_browser_tts') === 'true';
+      const stored = localStorage.getItem('use_browser_tts');
+      return stored === null ? true : stored === 'true';
     }
-    return false;
+    return true;
   });
 
   const toggleBrowserTts = useCallback((val: boolean) => {
