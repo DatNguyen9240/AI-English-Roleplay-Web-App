@@ -31,6 +31,8 @@ export interface UseAudioRecorderReturn {
   sendTextMessage: (text: string) => void;
   useBrowserTts: boolean;
   toggleBrowserTts: (val: boolean) => void;
+  useBrowserStt: boolean;
+  toggleBrowserStt: (val: boolean) => void;
   startMicManual: () => Promise<void>;
   resetSession: () => void;
   ttsVoiceName: string | null;
@@ -77,6 +79,21 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     }
     if (playoutQueueRef.current) {
       playoutQueueRef.current.useBrowserTts = val;
+    }
+  }, []);
+
+  const [useBrowserStt, setUseBrowserStt] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('use_browser_stt');
+      return stored === 'true';
+    }
+    return false;
+  });
+
+  const toggleBrowserStt = useCallback((val: boolean) => {
+    setUseBrowserStt(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('use_browser_stt', String(val));
     }
   }, []);
 
@@ -211,6 +228,9 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const stopAudioRef = useRef<() => void>(() => undefined);
   const stopRecordingRef = useRef<() => void>(() => undefined);
 
+  const recognitionRef = useRef<any>(null);
+  const transcriptRef = useRef('');
+
   /** Stops mic/worklet/AudioContext — socket stays alive until llm-stream-done */
   const stopAudio = useCallback((): void => {
     setIsRecording(false);
@@ -237,12 +257,42 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     lastVolumeUpdateRef.current = 0;
   }, []);
 
+  const sendTextMessage = useCallback((text: string): void => {
+    if (!text.trim()) return;
+    logger.log('[useAudioRecorder] Sending user text message:', text);
+    
+    // Clear audio buffers to ignore background noise during typing
+    audioBufferQueueRef.current = [];
+    sequenceNumberRef.current = 0;
+    vadProcessorRef.current?.reset();
+
+    // Send the text message to the server
+    streamerRef.current?.sendTextInput(text);
+
+    // Update local state to PROCESSING
+    updateStatus('PROCESSING');
+  }, [updateStatus]);
+
   /** Stops audio, signals server, enters PROCESSING. Socket kept alive. */
   const stopRecording = useCallback((): void => {
     setIsRecording(false);
     setRmsVolume(0);
-    vadProcessorRef.current?.reset();
 
+    if (useBrowserStt) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+      const textVal = transcriptRef.current.trim();
+      if (textVal) {
+        sendTextMessage(textVal);
+      } else {
+        updateStatus('IDLE');
+      }
+      return;
+    }
+
+    vadProcessorRef.current?.reset();
     updateStatus('PROCESSING');
     streamerRef.current?.sendSpeechEnd();
 
@@ -253,7 +303,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       updateStatus('ERROR');
       streamerRef.current?.disconnect();
     }, audioConfig.sttTimeoutMs);
-  }, [updateStatus, stopAudio]);
+  }, [updateStatus, stopAudio, useBrowserStt, sendTextMessage]);
 
   stopAudioRef.current = stopAudio;
   stopRecordingRef.current = stopRecording;
@@ -345,8 +395,51 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   }, []);
 
   const startMicManual = useCallback(async () => {
+    setTranscript('');
+    transcriptRef.current = '';
     setIsRecording(true);
     updateStatus('LISTENING');
+
+    if (useBrowserStt) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        logger.error('Browser does not support SpeechRecognition');
+        updateStatus('ERROR');
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: any) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        const text = finalTranscript + interimTranscript;
+        setTranscript(text);
+        transcriptRef.current = text;
+      };
+
+      recognition.onerror = (err: any) => {
+        logger.error('[BrowserSTT] Speech recognition error:', err);
+      };
+
+      recognition.onend = () => {
+        logger.log('[BrowserSTT] Speech recognition ended');
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+      return;
+    }
 
     try {
       if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
@@ -362,7 +455,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       logger.error('[Manual Mic] Failed to start:', err);
       updateStatus('ERROR');
     }
-  }, [startMicCapture, updateStatus]);
+  }, [startMicCapture, updateStatus, useBrowserStt]);
 
   const startRecording = useCallback(async (topic?: string): Promise<void> => {
     setIsRecording(false);
@@ -550,21 +643,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     }
   }, [socketUrl, updateStatus, startMicCapture]);
 
-  const sendTextMessage = useCallback((text: string): void => {
-    if (!text.trim()) return;
-    logger.log('[useAudioRecorder] Sending user text message:', text);
-    
-    // Clear audio buffers to ignore background noise during typing
-    audioBufferQueueRef.current = [];
-    sequenceNumberRef.current = 0;
-    vadProcessorRef.current?.reset();
 
-    // Send the text message to the server
-    streamerRef.current?.sendTextInput(text);
-
-    // Update local state to PROCESSING
-    updateStatus('PROCESSING');
-  }, [updateStatus]);
 
   const resetSession = useCallback((): void => {
     forceCleanup();
@@ -591,6 +670,8 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     sendTextMessage,
     useBrowserTts,
     toggleBrowserTts,
+    useBrowserStt,
+    toggleBrowserStt,
     startMicManual,
     resetSession,
     ttsVoiceName,
