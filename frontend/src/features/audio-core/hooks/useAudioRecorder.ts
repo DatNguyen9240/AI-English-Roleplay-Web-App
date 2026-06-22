@@ -40,6 +40,7 @@ export interface UseAudioRecorderReturn {
   ttsRate: number;
   changeTtsRate: (val: number) => void;
   availableVoices: SpeechSynthesisVoice[];
+  suggestions: string[];
 }
 
 /**
@@ -61,6 +62,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [currentPlayingSentence, setCurrentPlayingSentence] = useState('');
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   const [useBrowserTts, setUseBrowserTts] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -399,6 +401,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setChatHistory([]);
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
+    setSuggestions([]);
     
     // Reset playout queue for the new turn
     playoutQueueRef.current?.stop();
@@ -490,12 +493,18 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       });
 
       // ── LLM stream done ──────────────────────────────────────────────────
-      streamerRef.current!.on(SOCKET_EVENTS.LLM_STREAM_DONE, ({ latencyMs, totalChunks }) => {
+      streamerRef.current!.on(SOCKET_EVENTS.LLM_STREAM_DONE, ({ latencyMs, totalChunks, suggestions: suggestedAnswers }) => {
         clearTimeout(llmTimeoutRef.current ?? undefined);
         logger.log(`[LLM] Stream done in ${latencyMs}ms. Total chunks generated: ${totalChunks}`);
 
         if (playoutQueueRef.current && typeof totalChunks === 'number') {
           playoutQueueRef.current.setTotalChunks(totalChunks);
+        }
+
+        if (Array.isArray(suggestedAnswers)) {
+          setSuggestions(suggestedAnswers);
+        } else {
+          setSuggestions([]);
         }
 
         // Finalize the active AI message ID so it doesn't get appended next turn
@@ -603,6 +612,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setChatHistory([]);
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
+    setSuggestions([]);
   }, [forceCleanup, updateStatus]);
 
   return {
@@ -628,5 +638,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     ttsRate,
     changeTtsRate,
     availableVoices,
+    suggestions,
   };
 }

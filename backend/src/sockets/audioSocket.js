@@ -179,6 +179,8 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       );
 
       let llmFirstTokenReceived = false;
+      let isSuggestionsMode = false;
+      let suggestionsText = '';
 
       fullResponse = await llmService.generateStream(
         contextMessages,
@@ -192,8 +194,21 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
               'LLM_RESPONSE_RECEIVED'
             );
           }
-          socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token });
-          aggregator.push(token);
+
+          // Check if we hit the suggestions tag
+          const combined = fullResponse + token;
+          if (combined.includes('<suggestions>')) {
+            isSuggestionsMode = true;
+          }
+
+          if (isSuggestionsMode) {
+            suggestionsText += token;
+          } else {
+            socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token });
+            aggregator.push(token);
+          }
+          
+          fullResponse += token;
         },
         signal,
         session.customSystemPrompt
@@ -210,15 +225,33 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
         'LLM_COMPLETED'
       );
 
-      // Add assistant turn to history
-      if (fullResponse && !signal.aborted) {
-        session.conversationHistory.push({ role: 'assistant', content: fullResponse });
+      // Extract and parse suggestions
+      let suggestions = [];
+      const suggestionsMatch = fullResponse.match(/<suggestions>([\s\S]*?)<\/suggestions>/);
+      if (suggestionsMatch && suggestionsMatch[1]) {
+        try {
+          suggestions = JSON.parse(suggestionsMatch[1].trim());
+        } catch (err) {
+          logger.warn({ sessionId: socket.id, requestId, error: err.message }, 'Failed to parse suggestions JSON, trying regex split fallback');
+          suggestions = suggestionsMatch[1]
+            .replace(/[\[\]"]/g, '')
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+        }
+      }
+
+      // Add assistant turn to history (clean up suggestion block from history)
+      const cleanResponse = fullResponse.replace(/<suggestions>[\s\S]*?<\/suggestions>/g, '').trim();
+      if (cleanResponse && !signal.aborted) {
+        session.conversationHistory.push({ role: 'assistant', content: cleanResponse });
       }
 
       if (!signal.aborted) {
         socket.emit(SOCKET_EVENTS.LLM_STREAM_DONE, { 
           latencyMs: llmLatencyMs,
-          totalChunks: sentenceSeq
+          totalChunks: sentenceSeq,
+          suggestions: suggestions
         });
       }
 
@@ -387,7 +420,9 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       `Since this is the start of the conversation, you must write a short, engaging passage (around 50-80 words, 4-6 sentences) introducing or describing the topic "${topic}" in plain, friendly English. ` +
       `After the passage, ask the user what their thoughts or opinions are about this topic to start the discussion. ` +
       `For all subsequent replies, keep your responses concise (2–3 sentences maximum), react to what the user says, and ask follow-up questions to keep the conversation flowing. ` +
-      `Never use bullet points, list numbers, or markdown formatting. Speak in clear, plain English.`;
+      `Never use bullet points, list numbers, or markdown formatting in your main response. Speak in clear, plain English. ` +
+      `At the very end of your response, you MUST provide exactly 1 detailed, longer sample answer that the user can use to reply to your question, enclosed in <suggestions>...</suggestions> tags. ` +
+      `The suggestion must be formatted as a JSON array containing a single string, for example: <suggestions>["I think this topic is very interesting because it affects our daily lives and how we interact with technology."]</suggestions>`;
 
     try {
       // Transition FSM to processing then thinking

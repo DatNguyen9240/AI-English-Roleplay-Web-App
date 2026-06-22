@@ -32,6 +32,7 @@ function App(): React.ReactElement {
     ttsRate,
     changeTtsRate,
     availableVoices,
+    suggestions,
   } = useAudioRecorder(config.apiUrl);
 
   if (!user) {
@@ -92,6 +93,7 @@ function App(): React.ReactElement {
         ttsRate={ttsRate}
         changeTtsRate={changeTtsRate}
         availableVoices={availableVoices}
+        suggestions={suggestions}
       />
     </PageShell>
   );
