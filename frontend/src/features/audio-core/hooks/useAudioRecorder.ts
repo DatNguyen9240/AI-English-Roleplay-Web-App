@@ -506,15 +506,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         } else {
           setSuggestions([]);
         }
-
-        // Finalize the active AI message ID so it doesn't get appended next turn
-        setChatHistory((history) =>
-          history.map((msg) =>
-            msg.id === 'ai-current'
-              ? { ...msg, id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` }
-              : msg
-          )
-        );
       });
 
       // ── TTS audio chunk → playout ─────────────────────────────────────────
@@ -567,6 +558,15 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         setCurrentPlayingSentence('');
         setHighlightedWordIndex(-1);
         
+        // Finalize the active AI message ID so it doesn't get appended next turn
+        setChatHistory((history) =>
+          history.map((msg) =>
+            msg.id === 'ai-current'
+              ? { ...msg, id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` }
+              : msg
+          )
+        );
+
         if (isAutoMicRef.current) {
           setIsRecording(true);
           updateStatus('LISTENING');

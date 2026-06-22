@@ -77,8 +77,8 @@ export class PlaybackQueueManager {
   public useBrowserTts: boolean = false;
   public ttsVoiceName: string | null = null;
   public ttsRate: number = 1.0;
-  private isSpeakingBrowserTts: boolean = false;
   private totalChunks: number | null = null;
+  private activeUtterancesCount: number = 0;
 
   public onWordSpoken?: (
     wordText: string,
@@ -121,12 +121,10 @@ export class PlaybackQueueManager {
     if (!this.isPlaying) return;
 
     if (this.useBrowserTts) {
-      if (this.isSpeakingBrowserTts) return; // Wait for current utterance to finish
-
-      if (this.jitterBuffer.length > 0 && this.jitterBuffer[0].sequenceNumber === this.expectedSequenceNumber) {
+      while (this.jitterBuffer.length > 0 && this.jitterBuffer[0].sequenceNumber === this.expectedSequenceNumber) {
         const nextChunk = this.jitterBuffer.shift()!;
-        this.isSpeakingBrowserTts = true;
         this.playChunk(nextChunk);
+        this.expectedSequenceNumber++;
       }
       return;
     }
@@ -312,8 +310,7 @@ export class PlaybackQueueManager {
 
       utterance.onend = () => {
         logger.log(`[BrowserTTS] Playback finished: "${sentenceText}"`);
-        this.isSpeakingBrowserTts = false;
-        this.expectedSequenceNumber++;
+        this.activeUtterancesCount--;
 
         this.checkQueueEmpty(chunk.requestId);
         if (this.isPlaying) {
@@ -323,8 +320,7 @@ export class PlaybackQueueManager {
 
       utterance.onerror = (err) => {
         logger.error('[BrowserTTS] Speech synthesis error:', err);
-        this.isSpeakingBrowserTts = false;
-        this.expectedSequenceNumber++;
+        this.activeUtterancesCount--;
 
         this.checkQueueEmpty(chunk.requestId);
         if (this.isPlaying) {
@@ -332,12 +328,14 @@ export class PlaybackQueueManager {
         }
       };
 
+      this.activeUtterancesCount++;
       window.speechSynthesis.speak(utterance);
     } catch (err) {
       logger.error('[BrowserTTS] Failed to execute speak:', err);
-      this.isSpeakingBrowserTts = false;
-      this.expectedSequenceNumber++;
-      this.processQueue();
+      this.checkQueueEmpty(chunk.requestId);
+      if (this.isPlaying) {
+        this.processQueue();
+      }
     }
   }
 
@@ -350,7 +348,7 @@ export class PlaybackQueueManager {
     if (this.totalChunks === null) return;
 
     if (this.useBrowserTts) {
-      if (!this.isSpeakingBrowserTts && this.expectedSequenceNumber >= this.totalChunks && this.jitterBuffer.length === 0) {
+      if (this.activeUtterancesCount === 0 && this.expectedSequenceNumber >= this.totalChunks && this.jitterBuffer.length === 0) {
         if (this.onQueueEmpty) {
           this.isPlaying = false;
           this.onQueueEmpty(requestId);
@@ -385,8 +383,8 @@ export class PlaybackQueueManager {
    */
   public stop(): void {
     this.isPlaying = false;
-    this.isSpeakingBrowserTts = false;
     this.totalChunks = null;
+    this.activeUtterancesCount = 0;
 
     // Cancel any browser speech synthesis
     if (typeof window !== 'undefined' && window.speechSynthesis) {
