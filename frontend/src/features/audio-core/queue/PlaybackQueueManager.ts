@@ -75,6 +75,8 @@ export class PlaybackQueueManager {
   private lastRequestId: string | null = null;
 
   public useBrowserTts: boolean = false;
+  public ttsVoiceName: string | null = null;
+  public ttsRate: number = 1.0;
   private isSpeakingBrowserTts: boolean = false;
   private totalChunks: number | null = null;
 
@@ -261,10 +263,22 @@ export class PlaybackQueueManager {
       utterance.lang = 'en-US';
 
       // Try to get a high quality English voice consistently
-      const englishVoice = getEnglishVoice();
+      let englishVoice: SpeechSynthesisVoice | null = null;
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        const voices = window.speechSynthesis.getVoices();
+        if (this.ttsVoiceName) {
+          englishVoice = voices.find(v => v.name === this.ttsVoiceName) || null;
+        }
+      }
+      if (!englishVoice) {
+        englishVoice = getEnglishVoice();
+      }
       if (englishVoice) {
         utterance.voice = englishVoice;
       }
+
+      // Set playback speed
+      utterance.rate = this.ttsRate;
 
       utterance.onstart = () => {
         logger.log(`[BrowserTTS] Playback started: "${sentenceText}"`);

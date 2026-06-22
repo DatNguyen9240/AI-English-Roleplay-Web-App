@@ -35,6 +35,11 @@ export interface UseAudioRecorderReturn {
   toggleAutoMic: (val: boolean) => void;
   startMicManual: () => Promise<void>;
   resetSession: () => void;
+  ttsVoiceName: string | null;
+  changeTtsVoiceName: (val: string | null) => void;
+  ttsRate: number;
+  changeTtsRate: (val: number) => void;
+  availableVoices: SpeechSynthesisVoice[];
 }
 
 /**
@@ -92,6 +97,64 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setIsAutoMic(val);
     if (typeof window !== 'undefined') {
       localStorage.setItem('is_auto_mic', String(val));
+    }
+  }, []);
+
+  const [ttsVoiceName, setTtsVoiceName] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('tts_voice_name');
+    }
+    return null;
+  });
+
+  const [ttsRate, setTtsRate] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('tts_rate');
+      return stored ? parseFloat(stored) : 1.0;
+    }
+    return 1.0;
+  });
+
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    const updateVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      // Filter English voices
+      const enVoices = voices.filter(v => v.lang.startsWith('en'));
+      setAvailableVoices(enVoices);
+    };
+
+    updateVoices();
+    if ('onvoiceschanged' in window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+    return () => {
+      if (window.speechSynthesis && 'onvoiceschanged' in window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+
+  const changeTtsVoiceName = useCallback((val: string | null) => {
+    setTtsVoiceName(val);
+    if (typeof window !== 'undefined') {
+      if (val) localStorage.setItem('tts_voice_name', val);
+      else localStorage.removeItem('tts_voice_name');
+    }
+    if (playoutQueueRef.current) {
+      playoutQueueRef.current.ttsVoiceName = val;
+    }
+  }, []);
+
+  const changeTtsRate = useCallback((val: number) => {
+    setTtsRate(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('tts_rate', String(val));
+    }
+    if (playoutQueueRef.current) {
+      playoutQueueRef.current.ttsRate = val;
     }
   }, []);
 
@@ -475,6 +538,8 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       // Initialize Playout Queue Manager for the current session
       const queue = new PlaybackQueueManager(audioContext);
       queue.useBrowserTts = useBrowserTts;
+      queue.ttsVoiceName = ttsVoiceName;
+      queue.ttsRate = ttsRate;
       queue.onSentenceStart = (sentenceText) => {
         setCurrentPlayingSentence(sentenceText);
         setHighlightedWordIndex(-1);
@@ -551,5 +616,10 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     toggleAutoMic,
     startMicManual,
     resetSession,
+    ttsVoiceName,
+    changeTtsVoiceName,
+    ttsRate,
+    changeTtsRate,
+    availableVoices,
   };
 }

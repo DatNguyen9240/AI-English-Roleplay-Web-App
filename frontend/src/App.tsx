@@ -27,6 +27,11 @@ function App(): React.ReactElement {
     toggleAutoMic,
     startMicManual,
     resetSession,
+    ttsVoiceName,
+    changeTtsVoiceName,
+    ttsRate,
+    changeTtsRate,
+    availableVoices,
   } = useAudioRecorder(config.apiUrl);
 
   if (!user) {
@@ -82,6 +87,11 @@ function App(): React.ReactElement {
         toggleAutoMic={toggleAutoMic}
         startMicManual={startMicManual}
         resetSession={resetSession}
+        ttsVoiceName={ttsVoiceName}
+        changeTtsVoiceName={changeTtsVoiceName}
+        ttsRate={ttsRate}
+        changeTtsRate={changeTtsRate}
+        availableVoices={availableVoices}
       />
     </PageShell>
   );
