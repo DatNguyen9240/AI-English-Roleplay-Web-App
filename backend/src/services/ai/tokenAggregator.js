@@ -31,7 +31,7 @@ class TokenAggregator {
     this._buffer += token;
     this._tokenCount++;
 
-    const hasBoundary = /[.?!\n]/.test(token);
+    const hasBoundary = /\n/.test(token);
     const thresholdReached = this._tokenCount >= this.tokenThreshold;
 
     if (hasBoundary || thresholdReached) {
