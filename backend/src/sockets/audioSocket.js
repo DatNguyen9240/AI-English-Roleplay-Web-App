@@ -181,6 +181,7 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       let llmFirstTokenReceived = false;
       let isSuggestionsMode = false;
       let suggestionsText = '';
+      let tagBuffer = '';
 
       fullResponse = await llmService.generateStream(
         contextMessages,
@@ -195,17 +196,46 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
             );
           }
 
-          // Check if we hit the suggestions tag
-          const combined = fullResponse + token;
-          if (combined.includes('<suggestions>')) {
-            isSuggestionsMode = true;
-          }
-
           if (isSuggestionsMode) {
             suggestionsText += token;
           } else {
-            socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token });
-            aggregator.push(token);
+            // Buffer potential <suggestions> tag split across token streams
+            if (token.includes('<') || tagBuffer.length > 0) {
+              tagBuffer += token;
+
+              if (tagBuffer.includes('<suggestions>')) {
+                isSuggestionsMode = true;
+                const tagStartIndex = tagBuffer.indexOf('<suggestions>');
+                const preTagText = tagBuffer.slice(0, tagStartIndex);
+                if (preTagText) {
+                  socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token: preTagText });
+                  aggregator.push(preTagText);
+                }
+                suggestionsText = tagBuffer.slice(tagStartIndex);
+                tagBuffer = '';
+              } else {
+                const tag = '<suggestions>';
+                const possibleTagIndex = tagBuffer.indexOf('<');
+                if (possibleTagIndex !== -1) {
+                  const potentialPrefix = tagBuffer.slice(possibleTagIndex);
+                  if (tag.startsWith(potentialPrefix)) {
+                    // Valid prefix, wait for next tokens
+                  } else {
+                    // Invalid prefix, flush buffer
+                    socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token: tagBuffer });
+                    aggregator.push(tagBuffer);
+                    tagBuffer = '';
+                  }
+                } else {
+                  socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token: tagBuffer });
+                  aggregator.push(tagBuffer);
+                  tagBuffer = '';
+                }
+              }
+            } else {
+              socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token });
+              aggregator.push(token);
+            }
           }
           
           fullResponse += token;
@@ -213,6 +243,12 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
         signal,
         session.customSystemPrompt
       );
+
+      // Flush any leftover in the tag buffer if stream finished without completing the tag
+      if (tagBuffer) {
+        socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token: tagBuffer });
+        aggregator.push(tagBuffer);
+      }
 
       aggregator.flush();
 
