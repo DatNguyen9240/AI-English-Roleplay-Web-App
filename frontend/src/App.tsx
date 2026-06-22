@@ -22,6 +22,9 @@ function App(): React.ReactElement {
     stopRecording,
     sendTextMessage,
     useBrowserTts,
+    toggleBrowserTts,
+    useBrowserStt,
+    toggleBrowserStt,
     startMicManual,
     resetSession,
     ttsVoiceName,
@@ -80,6 +83,9 @@ function App(): React.ReactElement {
         stopRecording={stopRecording}
         sendTextMessage={sendTextMessage}
         useBrowserTts={useBrowserTts}
+        toggleBrowserTts={toggleBrowserTts}
+        useBrowserStt={useBrowserStt}
+        toggleBrowserStt={toggleBrowserStt}
         startMicManual={startMicManual}
         resetSession={resetSession}
         ttsVoiceName={ttsVoiceName}
