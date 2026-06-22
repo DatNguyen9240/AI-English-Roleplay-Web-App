@@ -15,6 +15,50 @@ export interface PlaybackChunk {
   words: WordTiming[];
 }
 
+let cachedVoiceName: string | null = null;
+
+// Trigger voice loading early in browser
+if (typeof window !== 'undefined' && window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  if ('onvoiceschanged' in window.speechSynthesis) {
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.getVoices();
+    };
+  }
+}
+
+function getEnglishVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length === 0) return null;
+
+  if (cachedVoiceName) {
+    const cached = voices.find(v => v.name === cachedVoiceName);
+    if (cached) return cached;
+  }
+
+  // Priority 1: Natural English voices
+  let voice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Natural'));
+  // Priority 2: Google/Local high quality
+  if (!voice) {
+    voice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.localService));
+  }
+  // Priority 3: Any English voice
+  if (!voice) {
+    voice = voices.find(v => v.lang.startsWith('en'));
+  }
+  // Priority 4: Default voice
+  if (!voice) {
+    voice = voices.find(v => v.default);
+  }
+
+  if (voice) {
+    cachedVoiceName = voice.name;
+    return voice;
+  }
+  return null;
+}
+
 /**
  * Manages the sequential, gapless playback of raw PCM audio chunks received over WebSockets.
  * Synchronizes playback with word highlight callbacks for karaoke-style subtitle animations.
@@ -32,6 +76,7 @@ export class PlaybackQueueManager {
 
   public useBrowserTts: boolean = false;
   private isSpeakingBrowserTts: boolean = false;
+  private totalChunks: number | null = null;
 
   public onWordSpoken?: (
     wordText: string,
@@ -159,11 +204,7 @@ export class PlaybackQueueManager {
       sourceNode.onended = () => {
         this.activeSources.delete(sourceNode);
         sourceNode.disconnect();
-        
-        // If no more active sources and jitter buffer is empty, notify queue empty
-        if (this.activeSources.size === 0 && this.jitterBuffer.length === 0 && this.onQueueEmpty) {
-          this.onQueueEmpty(chunk.requestId);
-        }
+        this.checkQueueEmpty(chunk.requestId);
       };
 
       // Set the sentence text as all words joined by space
@@ -219,15 +260,10 @@ export class PlaybackQueueManager {
       const utterance = new SpeechSynthesisUtterance(sentenceText);
       utterance.lang = 'en-US';
 
-      // Try to get a high quality English voice
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        const voices = window.speechSynthesis.getVoices();
-        const englishVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Natural'))
-          || voices.find(v => v.lang.startsWith('en') && v.localService)
-          || voices.find(v => v.lang.startsWith('en'));
-        if (englishVoice) {
-          utterance.voice = englishVoice;
-        }
+      // Try to get a high quality English voice consistently
+      const englishVoice = getEnglishVoice();
+      if (englishVoice) {
+        utterance.voice = englishVoice;
       }
 
       utterance.onstart = () => {
@@ -265,10 +301,8 @@ export class PlaybackQueueManager {
         this.isSpeakingBrowserTts = false;
         this.expectedSequenceNumber++;
 
-        if (this.jitterBuffer.length === 0 && this.onQueueEmpty) {
-          this.isPlaying = false;
-          this.onQueueEmpty(chunk.requestId);
-        } else {
+        this.checkQueueEmpty(chunk.requestId);
+        if (this.isPlaying) {
           this.processQueue();
         }
       };
@@ -278,10 +312,8 @@ export class PlaybackQueueManager {
         this.isSpeakingBrowserTts = false;
         this.expectedSequenceNumber++;
 
-        if (this.jitterBuffer.length === 0 && this.onQueueEmpty) {
-          this.isPlaying = false;
-          this.onQueueEmpty(chunk.requestId);
-        } else {
+        this.checkQueueEmpty(chunk.requestId);
+        if (this.isPlaying) {
           this.processQueue();
         }
       };
@@ -292,6 +324,31 @@ export class PlaybackQueueManager {
       this.isSpeakingBrowserTts = false;
       this.expectedSequenceNumber++;
       this.processQueue();
+    }
+  }
+
+  public setTotalChunks(total: number): void {
+    this.totalChunks = total;
+    this.checkQueueEmpty(this.lastRequestId || '');
+  }
+
+  private checkQueueEmpty(requestId: string): void {
+    if (this.totalChunks === null) return;
+
+    if (this.useBrowserTts) {
+      if (!this.isSpeakingBrowserTts && this.expectedSequenceNumber >= this.totalChunks && this.jitterBuffer.length === 0) {
+        if (this.onQueueEmpty) {
+          this.isPlaying = false;
+          this.onQueueEmpty(requestId);
+        }
+      }
+    } else {
+      if (this.activeSources.size === 0 && this.expectedSequenceNumber >= this.totalChunks && this.jitterBuffer.length === 0) {
+        if (this.onQueueEmpty) {
+          this.isPlaying = false;
+          this.onQueueEmpty(requestId);
+        }
+      }
     }
   }
 
@@ -315,6 +372,7 @@ export class PlaybackQueueManager {
   public stop(): void {
     this.isPlaying = false;
     this.isSpeakingBrowserTts = false;
+    this.totalChunks = null;
 
     // Cancel any browser speech synthesis
     if (typeof window !== 'undefined' && window.speechSynthesis) {

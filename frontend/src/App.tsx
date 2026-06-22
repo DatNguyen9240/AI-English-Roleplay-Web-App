@@ -26,6 +26,7 @@ function App(): React.ReactElement {
     isAutoMic,
     toggleAutoMic,
     startMicManual,
+    resetSession,
   } = useAudioRecorder(config.apiUrl);
 
   if (!user) {
@@ -80,6 +81,7 @@ function App(): React.ReactElement {
         isAutoMic={isAutoMic}
         toggleAutoMic={toggleAutoMic}
         startMicManual={startMicManual}
+        resetSession={resetSession}
       />
     </PageShell>
   );

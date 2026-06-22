@@ -49,6 +49,7 @@ export interface LlmChunkPayload {
 
 export interface LlmStreamDonePayload {
   latencyMs: number;
+  totalChunks?: number;
 }
 
 export interface SessionErrorPayload {

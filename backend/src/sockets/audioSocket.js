@@ -127,48 +127,53 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
     let sentenceSeq = 0;
 
     try {
+      const ttsPromises = [];
+
       // TokenAggregator prepares sentence-level batches for TTS (Phase 5)
       const aggregator = new TokenAggregator(
-        async (sentence) => {
+        (sentence) => {
           const currentSeq = sentenceSeq++;
           const ttsStart = Date.now();
           logger.info(
             { sessionId: socket.id, requestId, seq: currentSeq, sentence },
             'TTS_STARTED'
           );
-          try {
-            const { audio, sampleRate, words } = await ttsService.synthesize(sentence, requestId, signal);
-            
-            // Transition FSM to SPEAKING when the first synthesized chunk is ready
-            if (session.fsm.state === STATES.THINKING) {
-              session.fsm.transition(STATES.SPEAKING);
-            }
+          const p = (async () => {
+            try {
+              const { audio, sampleRate, words } = await ttsService.synthesize(sentence, requestId, signal);
+              
+              // Transition FSM to SPEAKING when the first synthesized chunk is ready
+              if (session.fsm.state === STATES.THINKING) {
+                session.fsm.transition(STATES.SPEAKING);
+              }
 
-            const ttsLatencyMs = Date.now() - ttsStart;
-            logger.info(
-              { sessionId: socket.id, requestId, seq: currentSeq, ttsLatencyMs },
-              'TTS_COMPLETED'
-            );
-            socket.emit(SOCKET_EVENTS.TTS_AUDIO_CHUNK, {
-              requestId,
-              sequenceNumber: currentSeq,
-              audio,
-              sampleRate,
-              words,
-            });
-          } catch (err) {
-            if (err.name === 'AbortError' || signal.aborted) {
+              const ttsLatencyMs = Date.now() - ttsStart;
               logger.info(
-                { sessionId: socket.id, requestId, seq: currentSeq },
-                'TTS synthesis aborted.'
+                { sessionId: socket.id, requestId, seq: currentSeq, ttsLatencyMs },
+                'TTS_COMPLETED'
               );
-              return;
+              socket.emit(SOCKET_EVENTS.TTS_AUDIO_CHUNK, {
+                requestId,
+                sequenceNumber: currentSeq,
+                audio,
+                sampleRate,
+                words,
+              });
+            } catch (err) {
+              if (err.name === 'AbortError' || signal.aborted) {
+                logger.info(
+                  { sessionId: socket.id, requestId, seq: currentSeq },
+                  'TTS synthesis aborted.'
+                );
+                return;
+              }
+              logger.error(
+                { sessionId: socket.id, requestId, seq: currentSeq, error: err.message },
+                'TTS_SYNTHESIS_FAILED'
+              );
             }
-            logger.error(
-              { sessionId: socket.id, requestId, seq: currentSeq, error: err.message },
-              'TTS_SYNTHESIS_FAILED'
-            );
-          }
+          })();
+          ttsPromises.push(p);
         },
         { tokenThreshold: TTS_TOKEN_THRESHOLD }
       );
@@ -196,6 +201,9 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
 
       aggregator.flush();
 
+      // Wait for all TTS promises to complete
+      await Promise.all(ttsPromises);
+
       const llmLatencyMs = Date.now() - llmStart;
       logger.info(
         { sessionId: socket.id, requestId, llmLatencyMs, responseLength: fullResponse.length },
@@ -208,7 +216,10 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       }
 
       if (!signal.aborted) {
-        socket.emit(SOCKET_EVENTS.LLM_STREAM_DONE, { latencyMs: llmLatencyMs });
+        socket.emit(SOCKET_EVENTS.LLM_STREAM_DONE, { 
+          latencyMs: llmLatencyMs,
+          totalChunks: sentenceSeq
+        });
       }
 
     } catch (err) {

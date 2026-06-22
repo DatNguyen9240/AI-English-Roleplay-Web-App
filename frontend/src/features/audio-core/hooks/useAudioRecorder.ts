@@ -34,6 +34,7 @@ export interface UseAudioRecorderReturn {
   isAutoMic: boolean;
   toggleAutoMic: (val: boolean) => void;
   startMicManual: () => Promise<void>;
+  resetSession: () => void;
 }
 
 /**
@@ -201,12 +202,17 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     updateStatus('PROCESSING');
     streamerRef.current?.sendSpeechEnd();
 
+    // If auto-mic is disabled, close the microphone stream immediately to avoid listening during AI turn
+    if (!isAutoMicRef.current) {
+      stopAudio();
+    }
+
     sttTimeoutRef.current = setTimeout(() => {
       logger.warn('[STT] Timeout — no stt-completed received');
       updateStatus('ERROR');
       streamerRef.current?.disconnect();
     }, audioConfig.sttTimeoutMs);
-  }, [updateStatus]);
+  }, [updateStatus, stopAudio]);
 
   stopAudioRef.current = stopAudio;
   stopRecordingRef.current = stopRecording;
@@ -416,9 +422,13 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       });
 
       // ── LLM stream done ──────────────────────────────────────────────────
-      streamerRef.current!.on(SOCKET_EVENTS.LLM_STREAM_DONE, ({ latencyMs }) => {
+      streamerRef.current!.on(SOCKET_EVENTS.LLM_STREAM_DONE, ({ latencyMs, totalChunks }) => {
         clearTimeout(llmTimeoutRef.current ?? undefined);
-        logger.log(`[LLM] Stream done in ${latencyMs}ms`);
+        logger.log(`[LLM] Stream done in ${latencyMs}ms. Total chunks generated: ${totalChunks}`);
+
+        if (playoutQueueRef.current && typeof totalChunks === 'number') {
+          playoutQueueRef.current.setTotalChunks(totalChunks);
+        }
 
         // Finalize the active AI message ID so it doesn't get appended next turn
         setChatHistory((history) =>
@@ -513,6 +523,16 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     updateStatus('PROCESSING');
   }, [updateStatus]);
 
+  const resetSession = useCallback((): void => {
+    forceCleanup();
+    updateStatus('IDLE');
+    setTranscript('');
+    setLlmText('');
+    setChatHistory([]);
+    setCurrentPlayingSentence('');
+    setHighlightedWordIndex(-1);
+  }, [forceCleanup, updateStatus]);
+
   return {
     isRecording,
     status,
@@ -530,5 +550,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     isAutoMic,
     toggleAutoMic,
     startMicManual,
+    resetSession,
   };
 }

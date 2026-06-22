@@ -21,6 +21,7 @@ interface AudioDashboardProps {
   isAutoMic: boolean;
   toggleAutoMic: (val: boolean) => void;
   startMicManual: () => void;
+  resetSession: () => void;
 }
 
 /**
@@ -43,6 +44,7 @@ export function AudioDashboard({
   isAutoMic,
   toggleAutoMic,
   startMicManual,
+  resetSession,
 }: AudioDashboardProps): React.ReactElement {
   const [topic, setTopic] = useState('');
   const volumePercentage = Math.min(100, Math.round(rmsVolume * 500));
@@ -168,25 +170,25 @@ export function AudioDashboard({
               {/* Dynamic Turn Guidance Badge */}
               <div className="w-full flex justify-center">
                 {status === 'LISTENING' && (
-                  <div className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-full flex items-center gap-2 animate-pulse font-mono uppercase tracking-wider">
+                  <div className="w-full text-center text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-full flex items-center justify-center gap-2 animate-pulse font-mono uppercase tracking-wider">
                     <Mic className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />
                     Your Turn: Speak now!
                   </div>
                 )}
                 {status === 'SPEAKING' && (
-                  <div className="text-xs font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-4 py-2 rounded-full flex items-center gap-2 font-mono uppercase tracking-wider">
+                  <div className="w-full text-center text-xs font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-4 py-2 rounded-full flex items-center justify-center gap-2 font-mono uppercase tracking-wider">
                     <Volume2 className="w-3.5 h-3.5 text-violet-400 animate-pulse" />
                     AI is Speaking...
                   </div>
                 )}
                 {status === 'THINKING' && (
-                  <div className="text-xs font-bold text-teal-400 bg-teal-500/10 border border-teal-500/20 px-4 py-2 rounded-full flex items-center gap-2 font-mono uppercase tracking-wider">
+                  <div className="w-full text-center text-xs font-bold text-teal-400 bg-teal-500/10 border border-teal-500/20 px-4 py-2 rounded-full flex items-center justify-center gap-2 font-mono uppercase tracking-wider">
                     <Loader2 className="w-3.5 h-3.5 text-teal-400 animate-spin" />
                     AI is Thinking...
                   </div>
                 )}
                 {status === 'PROCESSING' && (
-                  <div className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-full flex items-center gap-2 font-mono uppercase tracking-wider">
+                  <div className="w-full text-center text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-full flex items-center justify-center gap-2 font-mono uppercase tracking-wider">
                     <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />
                     Processing Voice...
                   </div>
@@ -211,14 +213,25 @@ export function AudioDashboard({
                 <VoiceVisualizer status={status} rmsVolume={rmsVolume} />
               </div>
 
-              {/* End Session Button */}
-              <button
-                id="btn-stop-recording"
-                onClick={stopRecording}
-                className="w-full py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white transition-colors shadow-lg shadow-rose-500/10 focus:outline-none text-sm"
-              >
-                End Roleplay Session
-              </button>
+              {/* Action Buttons */}
+              <div className="w-full flex flex-col gap-2.5">
+                {status === 'LISTENING' && (
+                  <button
+                    id="btn-stop-recording"
+                    onClick={stopRecording}
+                    className="w-full py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white transition-all shadow-lg shadow-blue-500/10 focus:outline-none text-sm flex items-center justify-center gap-2"
+                  >
+                    Done Speaking / Send (Xong & Gửi đi)
+                  </button>
+                )}
+
+                <button
+                  onClick={resetSession}
+                  className="w-full py-3 px-6 rounded-xl font-bold border border-slate-700 hover:bg-slate-800 text-slate-350 transition-colors focus:outline-none text-sm"
+                >
+                  Exit Session (Thoát Roleplay)
+                </button>
+              </div>
             </div>
           )}
         </div>
