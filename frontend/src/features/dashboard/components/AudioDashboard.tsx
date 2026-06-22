@@ -70,6 +70,37 @@ export function AudioDashboard({
     }
   };
 
+  const playMessageText = (text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    // Cancel any active speaking
+    window.speechSynthesis.cancel();
+
+    // Create a new utterance
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+
+    // Find the voice matching ttsVoiceName
+    let voice: SpeechSynthesisVoice | null = null;
+    const voices = window.speechSynthesis.getVoices();
+    if (ttsVoiceName) {
+      voice = voices.find((v) => v.name === ttsVoiceName) || null;
+    }
+    // Fallback: search for English voices
+    if (!voice) {
+      voice = voices.find((v) => v.lang.startsWith('en') && v.name.includes('Google')) ||
+              voices.find((v) => v.lang.startsWith('en')) ||
+              null;
+    }
+
+    if (voice) {
+      utterance.voice = voice;
+    }
+    utterance.rate = ttsRate;
+
+    window.speechSynthesis.speak(utterance);
+  };
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory, llmText, status]);
@@ -410,8 +441,17 @@ export function AudioDashboard({
                         }`}
                       >
                         {/* Bubble Header */}
-                        <div className={`text-[10px] text-slate-500 font-mono mb-1 px-1 ${isUser ? 'text-right' : 'text-left'}`}>
-                          {isUser ? 'You' : 'AI Tutor'}
+                        <div className={`text-[10px] text-slate-500 font-mono mb-1 px-1 flex items-center gap-1.5 ${isUser ? 'justify-end text-right' : 'justify-start text-left'}`}>
+                          <span>{isUser ? 'You' : 'AI Tutor'}</span>
+                          {!isUser && (
+                            <button
+                              onClick={() => playMessageText(msg.text)}
+                              title="Listen Again (Nghe lại)"
+                              className="p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-blue-400 transition-colors focus:outline-none flex items-center justify-center"
+                            >
+                              <Volume2 className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
 
                         {/* Bubble Body */}
