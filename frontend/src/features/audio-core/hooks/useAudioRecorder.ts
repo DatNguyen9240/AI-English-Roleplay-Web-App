@@ -64,21 +64,15 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
-  const [useBrowserTts, setUseBrowserTts] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('use_browser_tts');
-      return stored === null ? true : stored === 'true';
-    }
-    return true;
-  });
+  const [useBrowserTts, setUseBrowserTts] = useState<boolean>(true);
 
-  const toggleBrowserTts = useCallback((val: boolean) => {
-    setUseBrowserTts(val);
+  const toggleBrowserTts = useCallback((_val: boolean) => {
+    setUseBrowserTts(true);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('use_browser_tts', String(val));
+      localStorage.setItem('use_browser_tts', 'true');
     }
     if (playoutQueueRef.current) {
-      playoutQueueRef.current.useBrowserTts = val;
+      playoutQueueRef.current.useBrowserTts = true;
     }
   }, []);
 
