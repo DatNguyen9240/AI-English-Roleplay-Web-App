@@ -256,6 +256,15 @@ export class PlaybackQueueManager {
     try {
       const sentenceText = chunk.words.map((w) => w.text).join(' ');
 
+      // Pre-calculate exact character ranges for each word in sentenceText to prevent index mapping mismatches
+      let currentCharIndex = 0;
+      const wordRanges = chunk.words.map((w) => {
+        const start = currentCharIndex;
+        const end = start + w.text.length;
+        currentCharIndex = end + 1; // +1 for the joining space
+        return { start, end };
+      });
+
       // Create SpeechSynthesisUtterance
       const utterance = new SpeechSynthesisUtterance(sentenceText);
       utterance.lang = 'en-US';
@@ -287,18 +296,26 @@ export class PlaybackQueueManager {
 
       utterance.onboundary = (event) => {
         if (event.name === 'word') {
-          let charCount = 0;
+          const charIndex = event.charIndex;
           let wordIndex = -1;
 
-          for (let i = 0; i < chunk.words.length; i++) {
-            const word = chunk.words[i].text;
-            const index = sentenceText.indexOf(word, charCount);
-            if (index !== -1 && event.charIndex >= index && event.charIndex < index + word.length + 2) {
+          // Find which word range contains the boundary charIndex
+          for (let i = 0; i < wordRanges.length; i++) {
+            const range = wordRanges[i];
+            if (charIndex >= range.start && charIndex <= range.end) {
               wordIndex = i;
               break;
             }
-            if (index !== -1) {
-              charCount = index + word.length;
+          }
+
+          // Fallback matching for slight browser boundary alignment offsets
+          if (wordIndex === -1) {
+            for (let i = 0; i < wordRanges.length; i++) {
+              const range = wordRanges[i];
+              if (charIndex >= range.start && charIndex < range.end + 2) {
+                wordIndex = i;
+                break;
+              }
             }
           }
 
