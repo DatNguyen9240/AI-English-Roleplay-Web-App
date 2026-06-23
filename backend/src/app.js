@@ -20,9 +20,12 @@ const authRoutes = require('@routes/auth');
 const storageService = new LocalAudioStorage(audioConfig);
 
 const useMocks = process.env.USE_MOCKS !== 'false';
+const useSttMocks = process.env.USE_STT_MOCKS ? process.env.USE_STT_MOCKS === 'true' : useMocks;
+const useLlmMocks = process.env.USE_LLM_MOCKS ? process.env.USE_LLM_MOCKS === 'true' : useMocks;
+const useTtsMocks = process.env.USE_TTS_MOCKS ? process.env.USE_TTS_MOCKS === 'true' : useMocks;
 
 const sttService =
-  useMocks
+  useSttMocks
     ? new MockSttService()
     : new WhisperSttService({
         binaryPath: process.env.WHISPER_BINARY_PATH,
@@ -33,7 +36,7 @@ const sttService =
       });
 
 const llmService =
-  useMocks
+  useLlmMocks
     ? new MockLlmService()
     : new OpenRouterLlmService({
         apiKey: process.env.OPENROUTER_API_KEY,
@@ -41,7 +44,7 @@ const llmService =
       });
 
 const ttsService =
-  useMocks
+  useTtsMocks
     ? new MockTtsService()
     : new OpenAiTtsService({
         apiKey: process.env.OPENAI_API_KEY,

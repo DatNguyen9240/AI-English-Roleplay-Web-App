@@ -22,6 +22,18 @@ function App(): React.ReactElement {
     startRecording,
     stopRecording,
     sendTextMessage,
+    useBrowserTts,
+    toggleBrowserTts,
+    useBrowserStt,
+    toggleBrowserStt,
+    startMicManual,
+    resetSession,
+    ttsVoiceName,
+    changeTtsVoiceName,
+    ttsRate,
+    changeTtsRate,
+    availableVoices,
+    suggestions,
   } = useAudioRecorder(config.apiUrl);
 
   if (!user) {
@@ -64,6 +76,18 @@ function App(): React.ReactElement {
         startRecording={startRecording}
         stopRecording={stopRecording}
         sendTextMessage={sendTextMessage}
+        useBrowserTts={useBrowserTts}
+        toggleBrowserTts={toggleBrowserTts}
+        useBrowserStt={useBrowserStt}
+        toggleBrowserStt={toggleBrowserStt}
+        startMicManual={startMicManual}
+        resetSession={resetSession}
+        ttsVoiceName={ttsVoiceName}
+        changeTtsVoiceName={changeTtsVoiceName}
+        ttsRate={ttsRate}
+        changeTtsRate={changeTtsRate}
+        availableVoices={availableVoices}
+        suggestions={suggestions}
       />
     </PageShell>
   );

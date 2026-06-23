@@ -127,53 +127,61 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
     let sentenceSeq = 0;
 
     try {
+      const ttsPromises = [];
+
       // TokenAggregator prepares sentence-level batches for TTS (Phase 5)
       const aggregator = new TokenAggregator(
-        async (sentence) => {
+        (sentence) => {
           const currentSeq = sentenceSeq++;
           const ttsStart = Date.now();
           logger.info(
             { sessionId: socket.id, requestId, seq: currentSeq, sentence },
             'TTS_STARTED'
           );
-          try {
-            const { audio, sampleRate, words } = await ttsService.synthesize(sentence, requestId, signal);
-            
-            // Transition FSM to SPEAKING when the first synthesized chunk is ready
-            if (session.fsm.state === STATES.THINKING) {
-              session.fsm.transition(STATES.SPEAKING);
-            }
+          const p = (async () => {
+            try {
+              const { audio, sampleRate, words } = await ttsService.synthesize(sentence, requestId, signal);
+              
+              // Transition FSM to SPEAKING when the first synthesized chunk is ready
+              if (session.fsm.state === STATES.THINKING) {
+                session.fsm.transition(STATES.SPEAKING);
+              }
 
-            const ttsLatencyMs = Date.now() - ttsStart;
-            logger.info(
-              { sessionId: socket.id, requestId, seq: currentSeq, ttsLatencyMs },
-              'TTS_COMPLETED'
-            );
-            socket.emit(SOCKET_EVENTS.TTS_AUDIO_CHUNK, {
-              requestId,
-              sequenceNumber: currentSeq,
-              audio,
-              sampleRate,
-              words,
-            });
-          } catch (err) {
-            if (err.name === 'AbortError' || signal.aborted) {
+              const ttsLatencyMs = Date.now() - ttsStart;
               logger.info(
-                { sessionId: socket.id, requestId, seq: currentSeq },
-                'TTS synthesis aborted.'
+                { sessionId: socket.id, requestId, seq: currentSeq, ttsLatencyMs },
+                'TTS_COMPLETED'
               );
-              return;
+              socket.emit(SOCKET_EVENTS.TTS_AUDIO_CHUNK, {
+                requestId,
+                sequenceNumber: currentSeq,
+                audio,
+                sampleRate,
+                words,
+              });
+            } catch (err) {
+              if (err.name === 'AbortError' || signal.aborted) {
+                logger.info(
+                  { sessionId: socket.id, requestId, seq: currentSeq },
+                  'TTS synthesis aborted.'
+                );
+                return;
+              }
+              logger.error(
+                { sessionId: socket.id, requestId, seq: currentSeq, error: err.message },
+                'TTS_SYNTHESIS_FAILED'
+              );
             }
-            logger.error(
-              { sessionId: socket.id, requestId, seq: currentSeq, error: err.message },
-              'TTS_SYNTHESIS_FAILED'
-            );
-          }
+          })();
+          ttsPromises.push(p);
         },
         { tokenThreshold: TTS_TOKEN_THRESHOLD }
       );
 
       let llmFirstTokenReceived = false;
+      let isSuggestionsMode = false;
+      let suggestionsText = '';
+      let tagBuffer = '';
 
       fullResponse = await llmService.generateStream(
         contextMessages,
@@ -187,14 +195,65 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
               'LLM_RESPONSE_RECEIVED'
             );
           }
-          socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token });
-          aggregator.push(token);
+
+          if (isSuggestionsMode) {
+            suggestionsText += token;
+          } else {
+            // Buffer potential <suggestions> tag split across token streams
+            if (token.includes('<') || tagBuffer.length > 0) {
+              tagBuffer += token;
+
+              if (tagBuffer.includes('<suggestions>')) {
+                isSuggestionsMode = true;
+                const tagStartIndex = tagBuffer.indexOf('<suggestions>');
+                const preTagText = tagBuffer.slice(0, tagStartIndex);
+                if (preTagText) {
+                  socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token: preTagText });
+                  aggregator.push(preTagText);
+                }
+                suggestionsText = tagBuffer.slice(tagStartIndex);
+                tagBuffer = '';
+              } else {
+                const tag = '<suggestions>';
+                const possibleTagIndex = tagBuffer.indexOf('<');
+                if (possibleTagIndex !== -1) {
+                  const potentialPrefix = tagBuffer.slice(possibleTagIndex);
+                  if (tag.startsWith(potentialPrefix)) {
+                    // Valid prefix, wait for next tokens
+                  } else {
+                    // Invalid prefix, flush buffer
+                    socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token: tagBuffer });
+                    aggregator.push(tagBuffer);
+                    tagBuffer = '';
+                  }
+                } else {
+                  socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token: tagBuffer });
+                  aggregator.push(tagBuffer);
+                  tagBuffer = '';
+                }
+              }
+            } else {
+              socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token });
+              aggregator.push(token);
+            }
+          }
+          
+          fullResponse += token;
         },
         signal,
         session.customSystemPrompt
       );
 
+      // Flush any leftover in the tag buffer if stream finished without completing the tag
+      if (tagBuffer) {
+        socket.emit(SOCKET_EVENTS.LLM_STREAM_CHUNK, { token: tagBuffer });
+        aggregator.push(tagBuffer);
+      }
+
       aggregator.flush();
+
+      // Wait for all TTS promises to complete
+      await Promise.all(ttsPromises);
 
       const llmLatencyMs = Date.now() - llmStart;
       logger.info(
@@ -202,13 +261,34 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
         'LLM_COMPLETED'
       );
 
-      // Add assistant turn to history
-      if (fullResponse && !signal.aborted) {
-        session.conversationHistory.push({ role: 'assistant', content: fullResponse });
+      // Extract and parse suggestions
+      let suggestions = [];
+      const suggestionsMatch = fullResponse.match(/<suggestions>([\s\S]*?)<\/suggestions>/);
+      if (suggestionsMatch && suggestionsMatch[1]) {
+        try {
+          suggestions = JSON.parse(suggestionsMatch[1].trim());
+        } catch (err) {
+          logger.warn({ sessionId: socket.id, requestId, error: err.message }, 'Failed to parse suggestions JSON, trying regex split fallback');
+          suggestions = suggestionsMatch[1]
+            .replace(/[\[\]"]/g, '')
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+        }
+      }
+
+      // Add assistant turn to history (clean up suggestion block from history)
+      const cleanResponse = fullResponse.replace(/<suggestions>[\s\S]*?<\/suggestions>/g, '').trim();
+      if (cleanResponse && !signal.aborted) {
+        session.conversationHistory.push({ role: 'assistant', content: cleanResponse });
       }
 
       if (!signal.aborted) {
-        socket.emit(SOCKET_EVENTS.LLM_STREAM_DONE, { latencyMs: llmLatencyMs });
+        socket.emit(SOCKET_EVENTS.LLM_STREAM_DONE, { 
+          latencyMs: llmLatencyMs,
+          totalChunks: sentenceSeq,
+          suggestions: suggestions
+        });
       }
 
     } catch (err) {
@@ -376,7 +456,9 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       `Since this is the start of the conversation, you must write a short, engaging passage (around 50-80 words, 4-6 sentences) introducing or describing the topic "${topic}" in plain, friendly English. ` +
       `After the passage, ask the user what their thoughts or opinions are about this topic to start the discussion. ` +
       `For all subsequent replies, keep your responses concise (2–3 sentences maximum), react to what the user says, and ask follow-up questions to keep the conversation flowing. ` +
-      `Never use bullet points, list numbers, or markdown formatting. Speak in clear, plain English.`;
+      `Never use bullet points, list numbers, or markdown formatting in your main response. Speak in clear, plain English. ` +
+      `At the very end of your response, you MUST provide exactly 1 detailed, longer sample answer that the user can use to reply to your question, enclosed in <suggestions>...</suggestions> tags. ` +
+      `The suggestion must be formatted as a JSON array containing a single string, for example: <suggestions>["I think this topic is very interesting because it affects our daily lives and how we interact with technology."]</suggestions>`;
 
     try {
       // Transition FSM to processing then thinking

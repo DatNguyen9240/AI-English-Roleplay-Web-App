@@ -29,6 +29,18 @@ export interface UseAudioRecorderReturn {
   startRecording: (topic?: string) => Promise<void>;
   stopRecording: () => void;
   sendTextMessage: (text: string) => void;
+  useBrowserTts: boolean;
+  toggleBrowserTts: (val: boolean) => void;
+  useBrowserStt: boolean;
+  toggleBrowserStt: (val: boolean) => void;
+  startMicManual: () => Promise<void>;
+  resetSession: () => void;
+  ttsVoiceName: string | null;
+  changeTtsVoiceName: (val: string | null) => void;
+  ttsRate: number;
+  changeTtsRate: (val: number) => void;
+  availableVoices: SpeechSynthesisVoice[];
+  suggestions: string[];
 }
 
 /**
@@ -50,6 +62,87 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [currentPlayingSentence, setCurrentPlayingSentence] = useState('');
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  const [useBrowserTts, setUseBrowserTts] = useState<boolean>(true);
+
+  const toggleBrowserTts = useCallback((_val: boolean) => {
+    setUseBrowserTts(true);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('use_browser_tts', 'true');
+    }
+    if (playoutQueueRef.current) {
+      playoutQueueRef.current.useBrowserTts = true;
+    }
+  }, []);
+
+  const [useBrowserStt, setUseBrowserStt] = useState<boolean>(true);
+
+  const toggleBrowserStt = useCallback((_val: boolean) => {
+    setUseBrowserStt(true);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('use_browser_stt', 'true');
+    }
+  }, []);
+
+
+  const [ttsVoiceName, setTtsVoiceName] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('tts_voice_name');
+    }
+    return null;
+  });
+
+  const [ttsRate, setTtsRate] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('tts_rate');
+      return stored ? parseFloat(stored) : 1.0;
+    }
+    return 1.0;
+  });
+
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    const updateVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      // Filter English voices
+      const enVoices = voices.filter(v => v.lang.startsWith('en'));
+      setAvailableVoices(enVoices);
+    };
+
+    updateVoices();
+    if ('onvoiceschanged' in window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+    return () => {
+      if (window.speechSynthesis && 'onvoiceschanged' in window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+
+  const changeTtsVoiceName = useCallback((val: string | null) => {
+    setTtsVoiceName(val);
+    if (typeof window !== 'undefined') {
+      if (val) localStorage.setItem('tts_voice_name', val);
+      else localStorage.removeItem('tts_voice_name');
+    }
+    if (playoutQueueRef.current) {
+      playoutQueueRef.current.ttsVoiceName = val;
+    }
+  }, []);
+
+  const changeTtsRate = useCallback((val: number) => {
+    setTtsRate(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('tts_rate', String(val));
+    }
+    if (playoutQueueRef.current) {
+      playoutQueueRef.current.ttsRate = val;
+    }
+  }, []);
 
   const statusRef = useRef<RecordingStatus>('IDLE');
   useEffect(() => {
@@ -123,6 +216,9 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const stopAudioRef = useRef<() => void>(() => undefined);
   const stopRecordingRef = useRef<() => void>(() => undefined);
 
+  const recognitionRef = useRef<any>(null);
+  const transcriptRef = useRef('');
+
   /** Stops mic/worklet/AudioContext — socket stays alive until llm-stream-done */
   const stopAudio = useCallback((): void => {
     setIsRecording(false);
@@ -149,21 +245,53 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     lastVolumeUpdateRef.current = 0;
   }, []);
 
+  const sendTextMessage = useCallback((text: string): void => {
+    if (!text.trim()) return;
+    logger.log('[useAudioRecorder] Sending user text message:', text);
+    
+    // Clear audio buffers to ignore background noise during typing
+    audioBufferQueueRef.current = [];
+    sequenceNumberRef.current = 0;
+    vadProcessorRef.current?.reset();
+
+    // Send the text message to the server
+    streamerRef.current?.sendTextInput(text);
+
+    // Update local state to PROCESSING
+    updateStatus('PROCESSING');
+  }, [updateStatus]);
+
   /** Stops audio, signals server, enters PROCESSING. Socket kept alive. */
   const stopRecording = useCallback((): void => {
     setIsRecording(false);
     setRmsVolume(0);
-    vadProcessorRef.current?.reset();
 
+    if (useBrowserStt) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+      const textVal = transcriptRef.current.trim();
+      if (textVal) {
+        sendTextMessage(textVal);
+      } else {
+        updateStatus('IDLE');
+      }
+      return;
+    }
+
+    vadProcessorRef.current?.reset();
     updateStatus('PROCESSING');
     streamerRef.current?.sendSpeechEnd();
+
+    stopAudio();
 
     sttTimeoutRef.current = setTimeout(() => {
       logger.warn('[STT] Timeout — no stt-completed received');
       updateStatus('ERROR');
       streamerRef.current?.disconnect();
     }, audioConfig.sttTimeoutMs);
-  }, [updateStatus]);
+  }, [updateStatus, stopAudio, useBrowserStt, sendTextMessage]);
 
   stopAudioRef.current = stopAudio;
   stopRecordingRef.current = stopRecording;
@@ -190,14 +318,142 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const startRecording = useCallback(async (topic?: string): Promise<void> => {
+  const startMicCapture = useCallback(async (audioContext: AudioContext) => {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+    mediaStreamRef.current = stream;
+
+    await audioContext.audioWorklet.addModule(WORKLET_MODULE_URL);
+    const workletNode = new AudioWorkletNode(audioContext, 'audio-capture-processor');
+    workletNodeRef.current = workletNode;
+
+    audioInputRef.current = audioContext.createMediaStreamSource(stream);
+    audioInputRef.current.connect(workletNode);
+    workletNode.connect(audioContext.destination);
+
+    workletNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
+      const inputData = event.data;
+      const currentStatus = statusRef.current;
+
+      // 1. Interruption Check (during SPEAKING state)
+      if (currentStatus === 'SPEAKING') {
+        const volume = vadProcessorRef.current?.updateVolume(inputData) ?? 0;
+        const interruptionThreshold = audioConfig.interruptionVolumeThreshold;
+        if (volume > interruptionThreshold) {
+          logger.log(`[useAudioRecorder] Interruption detected. Volume: ${volume.toFixed(3)} (Threshold: ${interruptionThreshold.toFixed(3)})`);
+          triggerInterruptionRef.current();
+          return;
+        }
+      }
+
+      // 2. Silence detection & Audio streaming (only in LISTENING state)
+      if (currentStatus === 'LISTENING') {
+        vadProcessorRef.current?.process(inputData, () => {
+          logger.log('[VAD] Silence detected — triggering speech-end');
+          stopRecordingRef.current();
+        });
+
+        const downsampled = downsampleBuffer(
+          inputData,
+          audioContext.sampleRate,
+          audioConfig.targetSampleRate
+        );
+
+        audioBufferQueueRef.current.push(...downsampled);
+
+        while (audioBufferQueueRef.current.length >= SAMPLES_PER_CHUNK) {
+          const chunk = audioBufferQueueRef.current.splice(0, SAMPLES_PER_CHUNK);
+          const pcm16 = convertFloat32ToInt16(new Float32Array(chunk));
+          streamerRef.current?.sendChunk(sequenceNumberRef.current++, pcm16);
+        }
+      }
+
+      // 3. Update volume visualizer
+      const now = performance.now();
+      if (now - lastVolumeUpdateRef.current > 33) {
+        setRmsVolume(vadProcessorRef.current?.getVolume() ?? 0);
+        lastVolumeUpdateRef.current = now;
+      }
+    };
+  }, []);
+
+  const startMicManual = useCallback(async () => {
+    setTranscript('');
+    transcriptRef.current = '';
     setIsRecording(true);
     updateStatus('LISTENING');
+
+    if (useBrowserStt) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        logger.error('Browser does not support SpeechRecognition');
+        updateStatus('ERROR');
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: any) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        const text = finalTranscript + interimTranscript;
+        setTranscript(text);
+        transcriptRef.current = text;
+      };
+
+      recognition.onerror = (err: any) => {
+        logger.error('[BrowserSTT] Speech recognition error:', err);
+      };
+
+      recognition.onend = () => {
+        logger.log('[BrowserSTT] Speech recognition ended');
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+      return;
+    }
+
+    try {
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        audioContextRef.current = new window.AudioContext();
+      }
+      const audioContext = audioContextRef.current;
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+
+      await startMicCapture(audioContext);
+    } catch (err) {
+      logger.error('[Manual Mic] Failed to start:', err);
+      updateStatus('ERROR');
+    }
+  }, [startMicCapture, updateStatus, useBrowserStt]);
+
+  const startRecording = useCallback(async (topic?: string): Promise<void> => {
+    setIsRecording(false);
+    updateStatus('THINKING');
     setTranscript('');
     setLlmText('');
     setChatHistory([]);
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
+    setSuggestions([]);
     
     // Reset playout queue for the new turn
     playoutQueueRef.current?.stop();
@@ -289,18 +545,19 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       });
 
       // ── LLM stream done ──────────────────────────────────────────────────
-      streamerRef.current!.on(SOCKET_EVENTS.LLM_STREAM_DONE, ({ latencyMs }) => {
+      streamerRef.current!.on(SOCKET_EVENTS.LLM_STREAM_DONE, ({ latencyMs, totalChunks, suggestions: suggestedAnswers }) => {
         clearTimeout(llmTimeoutRef.current ?? undefined);
-        logger.log(`[LLM] Stream done in ${latencyMs}ms`);
+        logger.log(`[LLM] Stream done in ${latencyMs}ms. Total chunks generated: ${totalChunks}`);
 
-        // Finalize the active AI message ID so it doesn't get appended next turn
-        setChatHistory((history) =>
-          history.map((msg) =>
-            msg.id === 'ai-current'
-              ? { ...msg, id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` }
-              : msg
-          )
-        );
+        if (playoutQueueRef.current && typeof totalChunks === 'number') {
+          playoutQueueRef.current.setTotalChunks(totalChunks);
+        }
+
+        if (Array.isArray(suggestedAnswers)) {
+          setSuggestions(suggestedAnswers);
+        } else {
+          setSuggestions([]);
+        }
       });
 
       // ── TTS audio chunk → playout ─────────────────────────────────────────
@@ -327,15 +584,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         playoutQueueRef.current?.stop();
       });
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-      mediaStreamRef.current = stream;
-
       if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
         audioContextRef.current = new window.AudioContext();
       }
@@ -346,6 +594,9 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
 
       // Initialize Playout Queue Manager for the current session
       const queue = new PlaybackQueueManager(audioContext);
+      queue.useBrowserTts = useBrowserTts;
+      queue.ttsVoiceName = ttsVoiceName;
+      queue.ttsRate = ttsRate;
       queue.onSentenceStart = (sentenceText) => {
         setCurrentPlayingSentence(sentenceText);
         setHighlightedWordIndex(-1);
@@ -355,89 +606,43 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         setHighlightedWordIndex(index);
       };
       queue.onQueueEmpty = () => {
-        logger.log('[useAudioRecorder] Playout queue empty. Turn complete, auto-transitioning to LISTENING');
+        logger.log('[useAudioRecorder] Playout queue empty. Turn complete');
         setCurrentPlayingSentence('');
         setHighlightedWordIndex(-1);
-        setIsRecording(true);
-        updateStatus('LISTENING');
+        
+        // Finalize the active AI message ID so it doesn't get appended next turn
+        setChatHistory((history) =>
+          history.map((msg) =>
+            msg.id === 'ai-current'
+              ? { ...msg, id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` }
+              : msg
+          )
+        );
+
+        stopAudioRef.current();
+        updateStatus('IDLE');
       };
       playoutQueueRef.current = queue;
-
-      await audioContext.audioWorklet.addModule(WORKLET_MODULE_URL);
-      const workletNode = new AudioWorkletNode(audioContext, 'audio-capture-processor');
-      workletNodeRef.current = workletNode;
-
-      audioInputRef.current = audioContext.createMediaStreamSource(stream);
-      audioInputRef.current.connect(workletNode);
-      workletNode.connect(audioContext.destination);
-
-      workletNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
-        const inputData = event.data;
-        const currentStatus = statusRef.current;
-
-        // 1. Interruption Check (during SPEAKING state)
-        if (currentStatus === 'SPEAKING') {
-          const volume = vadProcessorRef.current?.updateVolume(inputData) ?? 0;
-          const interruptionThreshold = audioConfig.interruptionVolumeThreshold;
-          if (volume > interruptionThreshold) {
-            logger.log(`[useAudioRecorder] Interruption detected. Volume: ${volume.toFixed(3)} (Threshold: ${interruptionThreshold.toFixed(3)})`);
-            triggerInterruptionRef.current();
-            return;
-          }
-        }
-
-        // 2. Silence detection & Audio streaming (only in LISTENING state)
-        if (currentStatus === 'LISTENING') {
-          vadProcessorRef.current?.process(inputData, () => {
-            logger.log('[VAD] Silence detected — triggering speech-end');
-            stopRecordingRef.current();
-          });
-
-          const downsampled = downsampleBuffer(
-            inputData,
-            audioContext.sampleRate,
-            audioConfig.targetSampleRate
-          );
-
-          audioBufferQueueRef.current.push(...downsampled);
-
-          while (audioBufferQueueRef.current.length >= SAMPLES_PER_CHUNK) {
-            const chunk = audioBufferQueueRef.current.splice(0, SAMPLES_PER_CHUNK);
-            const pcm16 = convertFloat32ToInt16(new Float32Array(chunk));
-            streamerRef.current?.sendChunk(sequenceNumberRef.current++, pcm16);
-          }
-        }
-
-        // 3. Update volume visualizer
-        const now = performance.now();
-        if (now - lastVolumeUpdateRef.current > 33) {
-          setRmsVolume(vadProcessorRef.current?.getVolume() ?? 0);
-          lastVolumeUpdateRef.current = now;
-        }
-      };
     } catch (err) {
       logger.error('[Audio] Failed to start recording:', err);
       updateStatus('ERROR');
       stopAudioRef.current();
       streamerRef.current?.disconnect();
     }
-  }, [socketUrl, updateStatus]);
+  }, [socketUrl, updateStatus, startMicCapture]);
 
-  const sendTextMessage = useCallback((text: string): void => {
-    if (!text.trim()) return;
-    logger.log('[useAudioRecorder] Sending user text message:', text);
-    
-    // Clear audio buffers to ignore background noise during typing
-    audioBufferQueueRef.current = [];
-    sequenceNumberRef.current = 0;
-    vadProcessorRef.current?.reset();
 
-    // Send the text message to the server
-    streamerRef.current?.sendTextInput(text);
 
-    // Update local state to PROCESSING
-    updateStatus('PROCESSING');
-  }, [updateStatus]);
+  const resetSession = useCallback((): void => {
+    forceCleanup();
+    updateStatus('IDLE');
+    setTranscript('');
+    setLlmText('');
+    setChatHistory([]);
+    setCurrentPlayingSentence('');
+    setHighlightedWordIndex(-1);
+    setSuggestions([]);
+  }, [forceCleanup, updateStatus]);
 
   return {
     isRecording,
@@ -451,5 +656,17 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     startRecording,
     stopRecording,
     sendTextMessage,
+    useBrowserTts,
+    toggleBrowserTts,
+    useBrowserStt,
+    toggleBrowserStt,
+    startMicManual,
+    resetSession,
+    ttsVoiceName,
+    changeTtsVoiceName,
+    ttsRate,
+    changeTtsRate,
+    availableVoices,
+    suggestions,
   };
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { RecordingStatus } from 'shared-contracts';
 import { ChatMessage } from '@/features/audio-core/hooks/useAudioRecorder';
+import { Volume2 } from 'lucide-react';
 import { DashboardHeader } from './DashboardHeader';
 import { TopicSelector } from './TopicSelector';
 import { ActiveSessionPanel } from './ActiveSessionPanel';
@@ -19,30 +20,49 @@ interface AudioDashboardProps {
   startRecording: (topic?: string) => void;
   stopRecording: () => void;
   sendTextMessage: (text: string) => void;
+  useBrowserTts: boolean;
+  toggleBrowserTts: (val: boolean) => void;
+  useBrowserStt: boolean;
+  toggleBrowserStt: (val: boolean) => void;
+  startMicManual: () => void;
+  resetSession: () => void;
+  ttsVoiceName: string | null;
+  changeTtsVoiceName: (val: string | null) => void;
+  ttsRate: number;
+  changeTtsRate: (val: number) => void;
+  availableVoices: SpeechSynthesisVoice[];
+  suggestions: string[];
 }
 
 /**
  * Primary audio recording console.
  * Phase 4: Displays user transcript (STT) and streaming AI response (LLM).
  * Refactored: Split into lightweight subcomponents with unified design system tokens.
+ * Resolved: Integrated custom browser TTS controls, manual mic commands, and suggestions.
  */
 export function AudioDashboard({
-  isRecording,
   status,
   rmsVolume,
-  transcript,
-  llmText,
   chatHistory,
   currentPlayingSentence,
   highlightedWordIndex,
   startRecording,
   stopRecording,
   sendTextMessage,
+  useBrowserTts,
+  startMicManual,
+  resetSession,
+  ttsVoiceName,
+  changeTtsVoiceName,
+  ttsRate,
+  changeTtsRate,
+  availableVoices,
+  suggestions,
 }: AudioDashboardProps): React.ReactElement {
   const [topic, setTopic] = useState('');
 
   const isDisabled = status === 'PROCESSING' || status === 'THINKING' || status === 'SPEAKING';
-  const isSessionActive = status !== 'IDLE' && status !== 'ERROR';
+  const isSessionActive = chatHistory.length > 0 || (status !== 'IDLE' && status !== 'ERROR');
 
   const startButtonLabel =
     status === 'ERROR'      ? 'Retry' :
@@ -75,7 +95,65 @@ export function AudioDashboard({
               status={status}
               rmsVolume={rmsVolume}
               stopRecording={stopRecording}
+              startMicManual={startMicManual}
+              resetSession={resetSession}
             />
+          )}
+
+          {/* Voice Settings Card (Free Browser Voice settings) */}
+          {useBrowserTts && (
+            <div className="w-full mt-2 pt-4 border-t border-panel-border/30 flex flex-col gap-3 text-left">
+              <div className="text-[11px] font-semibold text-slate-450 font-mono uppercase tracking-wider flex items-center gap-1.5">
+                <Volume2 className="w-3.5 h-3.5 text-blue-400" />
+                Voice Settings (Giọng đọc)
+              </div>
+              
+              {/* Voice Dropdown */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-slate-500 font-sans">
+                  Voice / Accent (Giọng & Phát âm)
+                </label>
+                {availableVoices.length === 0 ? (
+                  <div className="text-[10px] text-amber-500 italic">
+                    Loading browser voices... (Đang tải...)
+                  </div>
+                ) : (
+                  <select
+                    value={ttsVoiceName || ''}
+                    onChange={(e) => changeTtsVoiceName(e.target.value || null)}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-panel-inner border border-panel-border text-slate-200 text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value="">System Default (Mặc định)</option>
+                    {availableVoices.map((voice) => (
+                      <option key={voice.name} value={voice.name}>
+                        {voice.name.replace(/Microsoft|Google|Natural/g, '').trim()} ({voice.lang})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Speed Dropdown */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-slate-500 font-sans">
+                  Reading Speed (Tốc độ đọc)
+                </label>
+                <select
+                  value={ttsRate}
+                  onChange={(e) => changeTtsRate(parseFloat(e.target.value))}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-panel-inner border border-panel-border text-slate-200 text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="0.8">0.8x (Chậm)</option>
+                  <option value="1.0">1.0x (Mặc định)</option>
+                  <option value="1.1">1.1x</option>
+                  <option value="1.2">1.2x (Nhanh vừa)</option>
+                  <option value="1.3">1.3x</option>
+                  <option value="1.5">1.5x (Nhanh)</option>
+                  <option value="1.7">1.7x</option>
+                  <option value="2.0">2.0x (Rất nhanh)</option>
+                </select>
+              </div>
+            </div>
           )}
         </div>
 
@@ -90,6 +168,9 @@ export function AudioDashboard({
               currentPlayingSentence={currentPlayingSentence}
               highlightedWordIndex={highlightedWordIndex}
               sendTextMessage={sendTextMessage}
+              suggestions={suggestions}
+              ttsVoiceName={ttsVoiceName}
+              ttsRate={ttsRate}
             />
           )}
         </div>

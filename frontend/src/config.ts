@@ -25,6 +25,16 @@ function getApiUrl(): string {
       return window.location.origin;
     }
     
+    // Case 3: Page is loaded on localhost, but VITE_API_URL points to localhost and we are NOT on the dev server.
+    // (e.g., we are running in Docker on port 8080/443, while VITE_API_URL defaults to http://localhost:5000).
+    // In this case, we must route requests through the Nginx reverse proxy (current origin) to use HTTPS/WSS
+    // and avoid mixed-content blocks.
+    const devPort = import.meta.env.VITE_DEV_PORT;
+    const isDevServer = devPort && window.location.port === String(devPort);
+    if (isLocalhostPage && pointsToLocalhost && !isDevServer) {
+      return window.location.origin;
+    }
+    
     return envValue;
   }
   

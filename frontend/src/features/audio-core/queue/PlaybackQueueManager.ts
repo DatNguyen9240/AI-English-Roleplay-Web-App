@@ -15,6 +15,50 @@ export interface PlaybackChunk {
   words: WordTiming[];
 }
 
+let cachedVoiceName: string | null = null;
+
+// Trigger voice loading early in browser
+if (typeof window !== 'undefined' && window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  if ('onvoiceschanged' in window.speechSynthesis) {
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.getVoices();
+    };
+  }
+}
+
+function getEnglishVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length === 0) return null;
+
+  if (cachedVoiceName) {
+    const cached = voices.find(v => v.name === cachedVoiceName);
+    if (cached) return cached;
+  }
+
+  // Priority 1: Natural English voices
+  let voice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Natural'));
+  // Priority 2: Google/Local high quality
+  if (!voice) {
+    voice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.localService));
+  }
+  // Priority 3: Any English voice
+  if (!voice) {
+    voice = voices.find(v => v.lang.startsWith('en'));
+  }
+  // Priority 4: Default voice
+  if (!voice) {
+    voice = voices.find(v => v.default);
+  }
+
+  if (voice) {
+    cachedVoiceName = voice.name;
+    return voice;
+  }
+  return null;
+}
+
 /**
  * Manages the sequential, gapless playback of raw PCM audio chunks received over WebSockets.
  * Synchronizes playback with word highlight callbacks for karaoke-style subtitle animations.
@@ -29,6 +73,12 @@ export class PlaybackQueueManager {
   private jitterTimeout: ReturnType<typeof setTimeout> | null = null;
   private isPlaying: boolean = false;
   private lastRequestId: string | null = null;
+
+  public useBrowserTts: boolean = false;
+  public ttsVoiceName: string | null = null;
+  public ttsRate: number = 1.0;
+  private totalChunks: number | null = null;
+  private activeUtterancesCount: number = 0;
 
   public onWordSpoken?: (
     wordText: string,
@@ -70,6 +120,15 @@ export class PlaybackQueueManager {
   private processQueue(): void {
     if (!this.isPlaying) return;
 
+    if (this.useBrowserTts) {
+      while (this.jitterBuffer.length > 0 && this.jitterBuffer[0].sequenceNumber === this.expectedSequenceNumber) {
+        const nextChunk = this.jitterBuffer.shift()!;
+        this.playChunk(nextChunk);
+        this.expectedSequenceNumber++;
+      }
+      return;
+    }
+
     // Clear any pending jitter timeout since we are processing
     if (this.jitterTimeout) {
       clearTimeout(this.jitterTimeout);
@@ -108,6 +167,11 @@ export class PlaybackQueueManager {
    * Decodes PCM ArrayBuffer to AudioBuffer and schedules it in AudioContext.
    */
   private playChunk(chunk: PlaybackChunk): void {
+    if (this.useBrowserTts) {
+      this.playChunkBrowserTts(chunk);
+      return;
+    }
+
     try {
       const float32Data = this.convertInt16ToFloat32(chunk.audio);
       
@@ -140,11 +204,7 @@ export class PlaybackQueueManager {
       sourceNode.onended = () => {
         this.activeSources.delete(sourceNode);
         sourceNode.disconnect();
-        
-        // If no more active sources and jitter buffer is empty, notify queue empty
-        if (this.activeSources.size === 0 && this.jitterBuffer.length === 0 && this.onQueueEmpty) {
-          this.onQueueEmpty(chunk.requestId);
-        }
+        this.checkQueueEmpty(chunk.requestId);
       };
 
       // Set the sentence text as all words joined by space
@@ -190,6 +250,138 @@ export class PlaybackQueueManager {
   }
 
   /**
+   * Speaks the sentence chunk using browser's speechSynthesis API (Free).
+   */
+  private playChunkBrowserTts(chunk: PlaybackChunk): void {
+    try {
+      const sentenceText = chunk.words.map((w) => w.text).join(' ');
+
+      // Pre-calculate exact character ranges for each word in sentenceText to prevent index mapping mismatches
+      let currentCharIndex = 0;
+      const wordRanges = chunk.words.map((w) => {
+        const start = currentCharIndex;
+        const end = start + w.text.length;
+        currentCharIndex = end + 1; // +1 for the joining space
+        return { start, end };
+      });
+
+      // Create SpeechSynthesisUtterance
+      const utterance = new SpeechSynthesisUtterance(sentenceText);
+      utterance.lang = 'en-US';
+
+      // Try to get a high quality English voice consistently
+      let englishVoice: SpeechSynthesisVoice | null = null;
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        const voices = window.speechSynthesis.getVoices();
+        if (this.ttsVoiceName) {
+          englishVoice = voices.find(v => v.name === this.ttsVoiceName) || null;
+        }
+      }
+      if (!englishVoice) {
+        englishVoice = getEnglishVoice();
+      }
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+      }
+
+      // Set playback speed
+      utterance.rate = this.ttsRate;
+
+      utterance.onstart = () => {
+        logger.log(`[BrowserTTS] Playback started: "${sentenceText}"`);
+        if (this.onSentenceStart) {
+          this.onSentenceStart(sentenceText, chunk.requestId);
+        }
+      };
+
+      utterance.onboundary = (event) => {
+        if (event.name === 'word') {
+          const charIndex = event.charIndex;
+          let wordIndex = -1;
+
+          // Find which word range contains the boundary charIndex
+          for (let i = 0; i < wordRanges.length; i++) {
+            const range = wordRanges[i];
+            if (charIndex >= range.start && charIndex <= range.end) {
+              wordIndex = i;
+              break;
+            }
+          }
+
+          // Fallback matching for slight browser boundary alignment offsets
+          if (wordIndex === -1) {
+            for (let i = 0; i < wordRanges.length; i++) {
+              const range = wordRanges[i];
+              if (charIndex >= range.start && charIndex < range.end + 2) {
+                wordIndex = i;
+                break;
+              }
+            }
+          }
+
+          if (wordIndex !== -1 && this.onWordSpoken) {
+            this.onWordSpoken(chunk.words[wordIndex].text, wordIndex, sentenceText, chunk.words, chunk.requestId);
+          }
+        }
+      };
+
+      utterance.onend = () => {
+        logger.log(`[BrowserTTS] Playback finished: "${sentenceText}"`);
+        this.activeUtterancesCount--;
+
+        this.checkQueueEmpty(chunk.requestId);
+        if (this.isPlaying) {
+          this.processQueue();
+        }
+      };
+
+      utterance.onerror = (err) => {
+        logger.error('[BrowserTTS] Speech synthesis error:', err);
+        this.activeUtterancesCount--;
+
+        this.checkQueueEmpty(chunk.requestId);
+        if (this.isPlaying) {
+          this.processQueue();
+        }
+      };
+
+      this.activeUtterancesCount++;
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      logger.error('[BrowserTTS] Failed to execute speak:', err);
+      this.checkQueueEmpty(chunk.requestId);
+      if (this.isPlaying) {
+        this.processQueue();
+      }
+    }
+  }
+
+  public setTotalChunks(total: number): void {
+    this.totalChunks = total;
+    this.checkQueueEmpty(this.lastRequestId || '');
+  }
+
+  private checkQueueEmpty(requestId: string): void {
+    if (this.totalChunks === null) return;
+
+    if (this.useBrowserTts) {
+      if (this.activeUtterancesCount === 0 && this.expectedSequenceNumber >= this.totalChunks && this.jitterBuffer.length === 0) {
+        if (this.onQueueEmpty) {
+          this.isPlaying = false;
+          this.onQueueEmpty(requestId);
+        }
+      }
+    } else {
+      if (this.activeSources.size === 0 && this.expectedSequenceNumber >= this.totalChunks && this.jitterBuffer.length === 0) {
+        if (this.onQueueEmpty) {
+          this.isPlaying = false;
+          this.onQueueEmpty(requestId);
+        }
+      }
+    }
+  }
+
+  /**
    * Helper to convert 16-bit Int16 PCM array to Float32Array (-1.0 to 1.0)
    */
   private convertInt16ToFloat32(arrayBuffer: ArrayBuffer): Float32Array {
@@ -208,6 +400,13 @@ export class PlaybackQueueManager {
    */
   public stop(): void {
     this.isPlaying = false;
+    this.totalChunks = null;
+    this.activeUtterancesCount = 0;
+
+    // Cancel any browser speech synthesis
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
     
     // Stop all active audio sources
     for (const source of this.activeSources) {

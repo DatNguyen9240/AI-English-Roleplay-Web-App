@@ -17,7 +17,9 @@ const DEFAULT_SYSTEM_PROMPT =
   'You are an enthusiastic AI English conversation partner helping the user practice spoken English. ' +
   'Keep all responses concise (2–3 sentences maximum), natural, and conversational. ' +
   'React to what the user said, then ask a relevant follow-up question to keep the conversation flowing. ' +
-  'Never use bullet points or markdown. Speak in plain, friendly English.';
+  'Never use bullet points or markdown in your main response. Speak in plain, friendly English. ' +
+  'At the very end of your response, you MUST provide exactly 1 detailed, longer sample answer that the user can use to reply to your question, enclosed in <suggestions>...</suggestions> tags. ' +
+  'The suggestion must be formatted as a JSON array containing a single string, for example: <suggestions>["I enjoy playing football with my friends on Saturday afternoons, and then we usually go out for dinner together."]</suggestions>';
 
 // ── Abstract base ────────────────────────────────────────────────────────────
 
@@ -48,7 +50,8 @@ class MockLlmService extends LlmService {
   async generateStream(messages, onToken, signal, systemPrompt) {
     let mockResponse =
       "That's really interesting! Your English is coming along nicely. " +
-      'Could you tell me a little more about what you enjoy doing on weekends?';
+      'Could you tell me a little more about what you enjoy doing on weekends?' +
+      '\n<suggestions>["I enjoy playing football with my friends on Saturday afternoons, and then we usually go out for dinner together."]</suggestions>';
 
     if (systemPrompt && messages.length === 0) {
       const topicMatch = systemPrompt.match(/practice topic is: "([^"]+)"/i);
@@ -59,7 +62,8 @@ class MockLlmService extends LlmService {
           `Lately, ${topicName} has become a very popular topic of discussion around the world. ` +
           `Many people believe it is highly important for our future and society, while others think it presents many challenges. ` +
           `Learning to express your opinion on this is a great way to improve your English. ` +
-          `What are your personal thoughts or experiences regarding this topic?`;
+          `What are your personal thoughts or experiences regarding this topic?` +
+          `\n<suggestions>["I believe ${topicName} is extremely important for our future because it will change the way we live and work in the next few years."]</suggestions>`;
       }
     }
 
