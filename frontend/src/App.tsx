@@ -33,8 +33,9 @@ function App(): React.ReactElement {
     ttsRate,
     changeTtsRate,
     availableVoices,
-    suggestions,
   } = useAudioRecorder(config.apiUrl);
+
+  const isSessionActive = chatHistory.length > 0 || (status !== 'IDLE' && status !== 'ERROR');
 
   if (!user) {
     return (
@@ -45,9 +46,9 @@ function App(): React.ReactElement {
   }
 
   return (
-    <PageShell>
+    <PageShell isSessionActive={isSessionActive}>
       {/* Top Header */}
-      <div className="w-full max-w-6xl flex justify-between items-center mb-6 px-4 sm:px-2">
+      <div className={`w-full max-w-6xl flex justify-between items-center mb-4 sm:mb-6 px-4 sm:px-2 ${isSessionActive ? 'hidden sm:flex' : 'flex'}`}>
         <Logo size="sm" />
         <div className="flex items-center gap-3 bg-slate-900/80 border border-slate-800 rounded-full py-1.5 pl-3.5 pr-1.5 shadow-xl">
           <div className="flex items-center gap-1.5 text-xs text-slate-300 font-medium max-w-[120px] sm:max-w-none truncate">

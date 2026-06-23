@@ -109,10 +109,10 @@ export function ChatInterface({
   };
 
   return (
-    <div className="w-full flex flex-col justify-between flex-1 animate-fade-in min-h-0 relative">
+    <div className="w-full flex flex-col justify-between h-full flex-1 animate-fade-in min-h-0 relative">
       
       {/* Chat Room Header / Status Indicator */}
-      <div className="flex justify-between items-center border-b border-white/5 pb-2.5 mb-2.5 relative flex-shrink-0">
+      <div className="flex justify-between items-center border-b border-white/5 pb-2.5 mb-2.5 px-4 sm:px-0 relative flex-shrink-0">
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${
             status === 'LISTENING' ? 'bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)] animate-pulse' :
@@ -227,7 +227,7 @@ export function ChatInterface({
       </div>
 
       {/* Message Box Areas */}
-      <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-4 scroll-smooth min-h-0 mb-3">
+      <div className="flex-1 overflow-y-auto pl-4 sm:pl-0 pr-4 sm:pr-1 flex flex-col gap-4 scroll-smooth min-h-0 mb-3">
         {chatHistory.length === 0 ? (
           <div className="text-center text-slate-500 text-xs py-8 italic font-sans">
             Connection established. Say hello to your AI tutor!
@@ -355,7 +355,7 @@ export function ChatInterface({
 
       {/* Readable Suggested Hint Cards */}
       {suggestions.length > 0 && (status === 'IDLE' || status === 'LISTENING') && (
-        <div className="w-full border-t border-white/5 pt-3.5 pb-2 flex flex-col gap-2.5 animate-fade-in text-left flex-shrink-0">
+        <div className="w-full border-t border-white/5 pt-3.5 pb-2 px-4 sm:px-0 flex flex-col gap-2.5 animate-fade-in text-left flex-shrink-0">
           <div className="text-[10px] font-bold text-slate-400 font-sans uppercase tracking-wider flex items-center gap-2">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
@@ -380,7 +380,7 @@ export function ChatInterface({
       )}
 
       {/* Unified Input & Action Bar */}
-      <div className="w-full border-t border-white/5 pt-3.5 flex-shrink-0 mt-auto">
+      <div className="w-full border-t border-white/5 pt-3 sm:pt-3.5 pb-4 sm:pb-0 px-4 sm:px-0 flex-shrink-0 mt-auto">
         <form
           onSubmit={handleSubmit}
           className="w-full flex items-end gap-2 bg-slate-900/50 border border-white/10 rounded-2xl p-1.5 pl-3.5 shadow-inner relative focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all duration-300"
