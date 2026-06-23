@@ -346,19 +346,24 @@ export function ChatInterface({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Horizontal Suggested Hint Tags */}
+      {/* Readable Suggested Hint Cards */}
       {suggestions.length > 0 && (status === 'IDLE' || status === 'LISTENING') && (
-        <div className="w-full border-t border-white/5 pt-2 pb-1.5 flex flex-col gap-1.5 animate-fade-in text-left flex-shrink-0">
-          <div className="text-[9px] text-slate-500 font-mono tracking-wider uppercase">
-            Suggested Replies (Click to use)
+        <div className="w-full border-t border-white/5 pt-3.5 pb-2 flex flex-col gap-2.5 animate-fade-in text-left flex-shrink-0">
+          <div className="text-[10px] font-bold text-slate-400 font-sans uppercase tracking-wider flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+            </span>
+            <span>Suggested Reply (Gợi ý trả lời - Click để chọn)</span>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin w-full">
+          
+          <div className="flex flex-col gap-2 max-h-[140px] overflow-y-auto pr-1">
             {suggestions.map((sug, idx) => (
               <button
                 key={idx}
                 type="button"
                 onClick={() => handleSuggestionClick(sug)}
-                className="flex-shrink-0 text-[11px] text-indigo-200 hover:text-white bg-indigo-500/10 hover:bg-indigo-500/25 border border-indigo-500/15 hover:border-indigo-500/35 px-3 py-1.5 rounded-full transition-all duration-200 shadow-sm font-medium whitespace-nowrap cursor-pointer hover:-translate-y-0.5 active:translate-y-0"
+                className="w-full text-left bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 hover:border-indigo-500/40 p-3.5 rounded-xl transition-all duration-200 text-sm sm:text-base leading-relaxed text-indigo-100 font-medium cursor-pointer shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0"
               >
                 {sug}
               </button>
@@ -368,17 +373,17 @@ export function ChatInterface({
       )}
 
       {/* Unified Input & Action Bar */}
-      <div className="w-full border-t border-white/5 pt-3 flex-shrink-0 mt-auto">
+      <div className="w-full border-t border-white/5 pt-3.5 flex-shrink-0 mt-auto">
         <form
           onSubmit={handleSubmit}
-          className="w-full flex items-center gap-2 bg-slate-900/35 border border-white/5 rounded-xl p-1 shadow-inner relative focus-within:border-indigo-500/40 transition-colors"
+          className="w-full flex items-end gap-2 bg-slate-900/50 border border-white/10 rounded-2xl p-1.5 pl-3.5 shadow-inner relative focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all duration-300"
         >
           <textarea
             ref={textareaRef}
             name="textInput"
             placeholder="Type your reply here..."
             disabled={status === 'PROCESSING' || status === 'THINKING'}
-            rows={1}
+            rows={2}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -388,19 +393,19 @@ export function ChatInterface({
                 }
               }
             }}
-            className="flex-1 bg-transparent border-0 outline-none text-slate-100 placeholder-slate-600 text-xs sm:text-sm py-2 px-3 resize-none max-h-16 focus:ring-0 focus:outline-none"
+            className="flex-1 bg-transparent border-0 outline-none text-slate-100 placeholder-slate-650 text-sm sm:text-base py-2.5 resize-none max-h-24 focus:ring-0 focus:outline-none leading-relaxed"
           />
 
-          <div className="flex items-center gap-1.5 pr-1 flex-shrink-0">
+          <div className="flex items-center gap-1.5 pr-1 flex-shrink-0 pb-1">
             {/* Mic trigger inside capsule */}
             {status === 'LISTENING' && stopRecording ? (
               <button
                 type="button"
                 onClick={stopRecording}
-                className="p-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white transition-all shadow-glow-listening w-8 h-8 flex items-center justify-center animate-pulse animate-halo-listening cursor-pointer"
+                className="p-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-600 text-white transition-all shadow-glow-listening w-8 h-8 flex items-center justify-center animate-pulse animate-halo-listening cursor-pointer"
                 title="Done Speaking"
               >
-                <Mic className="w-4 h-4 text-white" />
+                <Mic className="w-4.5 h-4.5 text-white" />
               </button>
             ) : status === 'IDLE' && startMicManual ? (
               <button
@@ -409,11 +414,11 @@ export function ChatInterface({
                 className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all w-8 h-8 flex items-center justify-center cursor-pointer"
                 title="Tap to Speak"
               >
-                <MicOff className="w-4 h-4" />
+                <MicOff className="w-4.5 h-4.5" />
               </button>
             ) : (status === 'PROCESSING' || status === 'THINKING' || status === 'SPEAKING') ? (
               <div className="p-1.5 rounded-lg bg-slate-900/60 border border-white/5 w-8 h-8 flex items-center justify-center">
-                <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+                <Loader2 className="w-4.5 h-4.5 animate-spin text-slate-500" />
               </div>
             ) : null}
 
@@ -424,7 +429,7 @@ export function ChatInterface({
               className="p-1.5 rounded-lg bg-gradient-to-r from-brand-primary-start to-brand-primary-end hover:brightness-110 disabled:from-slate-800/40 disabled:to-slate-800/40 disabled:text-slate-600 text-white transition-all shadow-glow-blue w-8 h-8 flex items-center justify-center cursor-pointer"
               title="Send Text"
             >
-              <Send className="w-4 h-4" />
+              <Send className="w-4.5 h-4.5" />
             </button>
           </div>
         </form>
