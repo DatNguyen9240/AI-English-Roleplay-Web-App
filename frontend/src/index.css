@@ -2,10 +2,59 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Panel and containers */
+  --color-panel-bg: rgba(15, 23, 42, 0.6);
+  --color-panel-border: rgba(30, 41, 59, 0.8);
+  --color-panel-inner: rgba(2, 6, 23, 0.4);
+
+  /* Primary brand gradients */
+  --color-primary-start: #2563eb;
+  --color-primary-end: #4f46e5;
+
+  /* App state colors */
+  --color-listening: #10b981;
+  --color-speaking: #8b5cf6;
+  --color-thinking: #2dd4bf;
+  --color-processing: #f59e0b;
+  --color-error: #f43f5e;
+
+  /* Premium shadows and glows */
+  --shadow-card: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  --shadow-glow-blue: 0 0 20px rgba(59, 130, 246, 0.25);
+  --shadow-glow-listening: 0 0 15px rgba(16, 185, 129, 0.35);
+  --shadow-glow-speaking: 0 0 20px rgba(139, 92, 246, 0.5);
+  --shadow-glow-thinking: 0 0 15px rgba(45, 212, 191, 0.3);
+  --shadow-glow-processing: 0 0 15px rgba(245, 158, 11, 0.3);
+  --shadow-glow-error: 0 0 15px rgba(244, 63, 94, 0.35);
+}
+
+
 @layer utilities {
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes spin-reverse-slow {
+    from { transform: rotate(360deg); }
+    to { transform: rotate(0deg); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+  .animate-spin-slow {
+    animation: spin-slow 10s linear infinite;
+  }
+  .animate-spin-reverse-slow {
+    animation: spin-reverse-slow 12s linear infinite;
+  }
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
   }
 }
 
