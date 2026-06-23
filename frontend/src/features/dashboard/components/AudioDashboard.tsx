@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { RecordingStatus } from 'shared-contracts';
 import { ChatMessage } from '@/features/audio-core/hooks/useAudioRecorder';
-import { Volume2 } from 'lucide-react';
+import { Volume2, Settings } from 'lucide-react';
 import { DashboardHeader } from './DashboardHeader';
 import { TopicSelector } from './TopicSelector';
 import { ActiveSessionPanel } from './ActiveSessionPanel';
@@ -50,6 +50,9 @@ export function AudioDashboard({
   stopRecording,
   sendTextMessage,
   useBrowserTts,
+  toggleBrowserTts,
+  useBrowserStt,
+  toggleBrowserStt,
   startMicManual,
   resetSession,
   ttsVoiceName,
@@ -99,6 +102,76 @@ export function AudioDashboard({
               resetSession={resetSession}
             />
           )}
+
+          {/* Settings Section (Cấu hình STT/TTS) */}
+          <div className="w-full mt-4 pt-4 border-t border-panel-border/30 flex flex-col gap-3 text-left">
+            <div className="text-[11px] font-semibold text-slate-450 font-mono uppercase tracking-wider flex items-center gap-1.5">
+              <Settings className="w-3.5 h-3.5 text-emerald-400" />
+              Speech Engine Settings (Cấu hình âm thanh)
+            </div>
+
+            {/* STT Selection */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-slate-500 font-sans">
+                Speech-to-Text (Nhận diện giọng nói)
+              </label>
+              <div className="grid grid-cols-2 gap-1 bg-slate-900/60 p-0.5 rounded-lg border border-panel-border/50">
+                <button
+                  type="button"
+                  onClick={() => toggleBrowserStt(true)}
+                  className={`py-1 px-2 rounded-md text-[10px] font-medium transition-all ${
+                    useBrowserStt
+                      ? 'bg-blue-600/30 text-blue-300 font-semibold shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Browser (Trình duyệt)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleBrowserStt(false)}
+                  className={`py-1 px-2 rounded-md text-[10px] font-medium transition-all ${
+                    !useBrowserStt
+                      ? 'bg-blue-600/30 text-blue-300 font-semibold shadow-sm'
+                      : 'text-slate-450 hover:text-slate-200'
+                  }`}
+                >
+                  Whisper (Mạnh mẽ)
+                </button>
+              </div>
+            </div>
+
+            {/* TTS Selection */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-slate-500 font-sans">
+                Text-to-Speech (Giọng đọc AI)
+              </label>
+              <div className="grid grid-cols-2 gap-1 bg-slate-900/60 p-0.5 rounded-lg border border-panel-border/50">
+                <button
+                  type="button"
+                  onClick={() => toggleBrowserTts(true)}
+                  className={`py-1 px-2 rounded-md text-[10px] font-medium transition-all ${
+                    useBrowserTts
+                      ? 'bg-blue-600/30 text-blue-300 font-semibold shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Browser (Miễn phí)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleBrowserTts(false)}
+                  className={`py-1 px-2 rounded-md text-[10px] font-medium transition-all ${
+                    !useBrowserTts
+                      ? 'bg-blue-600/30 text-blue-300 font-semibold shadow-sm'
+                      : 'text-slate-450 hover:text-slate-200'
+                  }`}
+                >
+                  OpenAI (Tự nhiên)
+                </button>
+              </div>
+            </div>
+          </div>
 
           {/* Voice Settings Card (Free Browser Voice settings) */}
           {useBrowserTts && (

@@ -64,24 +64,36 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
-  const [useBrowserTts, setUseBrowserTts] = useState<boolean>(true);
-
-  const toggleBrowserTts = useCallback((_val: boolean) => {
-    setUseBrowserTts(true);
+  const [useBrowserTts, setUseBrowserTts] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('use_browser_tts', 'true');
+      const stored = localStorage.getItem('use_browser_tts');
+      return stored !== 'false'; // Defaults to true
+    }
+    return true;
+  });
+
+  const toggleBrowserTts = useCallback((val: boolean) => {
+    setUseBrowserTts(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('use_browser_tts', String(val));
     }
     if (playoutQueueRef.current) {
-      playoutQueueRef.current.useBrowserTts = true;
+      playoutQueueRef.current.useBrowserTts = val;
     }
   }, []);
 
-  const [useBrowserStt, setUseBrowserStt] = useState<boolean>(true);
-
-  const toggleBrowserStt = useCallback((_val: boolean) => {
-    setUseBrowserStt(true);
+  const [useBrowserStt, setUseBrowserStt] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('use_browser_stt', 'true');
+      const stored = localStorage.getItem('use_browser_stt');
+      return stored !== 'false'; // Defaults to true
+    }
+    return true;
+  });
+
+  const toggleBrowserStt = useCallback((val: boolean) => {
+    setUseBrowserStt(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('use_browser_stt', String(val));
     }
   }, []);
 
@@ -404,7 +416,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       recognition.onresult = (event: any) => {
         let interimTranscript = '';
         let finalTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
+        for (let i = 0; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
             finalTranscript += event.results[i][0].transcript;
           } else {
