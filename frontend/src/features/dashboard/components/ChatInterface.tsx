@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { RecordingStatus } from 'shared-contracts';
 import { ChatMessage } from '@/features/audio-core/hooks/useAudioRecorder';
+import { Volume2 } from 'lucide-react';
 
 interface ChatInterfaceProps {
   chatHistory: ChatMessage[];
@@ -8,6 +9,9 @@ interface ChatInterfaceProps {
   currentPlayingSentence?: string;
   highlightedWordIndex?: number;
   sendTextMessage: (text: string) => void;
+  suggestions: string[];
+  ttsVoiceName: string | null;
+  ttsRate: number;
 }
 
 export function ChatInterface({
@@ -16,13 +20,55 @@ export function ChatInterface({
   currentPlayingSentence,
   highlightedWordIndex,
   sendTextMessage,
+  suggestions,
+  ttsVoiceName,
+  ttsRate,
 }: ChatInterfaceProps): React.ReactElement {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-scroll when new messages or statuses arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory, status]);
+
+  const handleSuggestionClick = (text: string) => {
+    if (textareaRef.current) {
+      textareaRef.current.value = text;
+      textareaRef.current.focus();
+    }
+  };
+
+  const playMessageText = (text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    // Cancel any active speaking
+    window.speechSynthesis.cancel();
+
+    // Create a new utterance
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+
+    // Find the voice matching ttsVoiceName
+    let voice: SpeechSynthesisVoice | null = null;
+    const voices = window.speechSynthesis.getVoices();
+    if (ttsVoiceName) {
+      voice = voices.find((v) => v.name === ttsVoiceName) || null;
+    }
+    // Fallback: search for English voices
+    if (!voice) {
+      voice = voices.find((v) => v.lang.startsWith('en') && v.name.includes('Google')) ||
+              voices.find((v) => v.lang.startsWith('en')) ||
+              null;
+    }
+
+    if (voice) {
+      utterance.voice = voice;
+    }
+    utterance.rate = ttsRate;
+
+    window.speechSynthesis.speak(utterance);
+  };
 
   return (
     <div className="w-full flex flex-col gap-4 justify-between h-full flex-1 animate-fade-in">
@@ -59,8 +105,17 @@ export function ChatInterface({
                 }`}
               >
                 {/* Bubble Header */}
-                <div className={`text-[10px] text-slate-500 font-mono mb-1 px-1 ${isUser ? 'text-right' : 'text-left'}`}>
-                  {isUser ? 'You' : 'AI Tutor'}
+                <div className={`text-[10px] text-slate-500 font-mono mb-1 px-1 flex items-center gap-1.5 ${isUser ? 'justify-end text-right' : 'justify-start text-left'}`}>
+                  <span>{isUser ? 'You' : 'AI Tutor'}</span>
+                  {!isUser && (
+                    <button
+                      onClick={() => playMessageText(msg.text)}
+                      title="Listen Again (Nghe lại)"
+                      className="p-0.5 rounded hover:bg-panel-inner text-slate-400 hover:text-blue-400 transition-colors focus:outline-none flex items-center justify-center"
+                    >
+                      <Volume2 className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Bubble Body */}
@@ -86,11 +141,11 @@ export function ChatInterface({
                           return (
                             <span
                               key={idx}
-                              className={`transition-all duration-150 rounded ${
+                              className={`transition-all duration-155 rounded ${
                                 isHighlighted
                                   ? 'text-status-listening font-bold bg-status-listening/20 px-1 scale-105 shadow-sm shadow-glow-listening'
                                   : 'text-slate-400'
-                                  }`}
+                              }`}
                             >
                               {word}
                             </span>
@@ -125,6 +180,22 @@ export function ChatInterface({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Suggested Hint / Sample Answer */}
+      {suggestions.length > 0 && (status === 'IDLE' || status === 'LISTENING') && (
+        <div className="w-full border-t border-panel-border/30 pt-3 flex flex-col gap-1.5 animate-fade-in text-left">
+          <div className="text-[10px] text-slate-450 font-mono tracking-wider uppercase">
+            Suggested Reply (Gợi ý trả lời - Click để dùng)
+          </div>
+          <button
+            type="button"
+            onClick={() => handleSuggestionClick(suggestions[0])}
+            className="w-full text-xs text-slate-350 hover:text-blue-300 bg-panel-inner border border-panel-border px-4 py-3 rounded-xl transition-all duration-200 text-left shadow-sm hover:shadow leading-relaxed"
+          >
+            {suggestions[0]}
+          </button>
+        </div>
+      )}
+
       {/* Drafting area for typed response */}
       <div className="w-full border-t border-panel-border/80 pt-4 mt-auto">
         <div className="flex justify-between text-[11px] text-slate-400 mb-2 font-mono">
@@ -144,6 +215,7 @@ export function ChatInterface({
           className="w-full flex gap-3 items-end"
         >
           <textarea
+            ref={textareaRef}
             name="textInput"
             placeholder="Type or paste your English reply here... (Enter to Send)"
             disabled={status === 'PROCESSING' || status === 'THINKING'}

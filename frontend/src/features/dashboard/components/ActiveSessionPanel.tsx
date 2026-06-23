@@ -7,12 +7,16 @@ interface ActiveSessionPanelProps {
   status: RecordingStatus;
   rmsVolume: number;
   stopRecording: () => void;
+  startMicManual: () => void;
+  resetSession: () => void;
 }
 
 export function ActiveSessionPanel({
   status,
   rmsVolume,
   stopRecording,
+  startMicManual,
+  resetSession,
 }: ActiveSessionPanelProps): React.ReactElement {
   const volumePercentage = Math.min(100, Math.round(rmsVolume * 500));
 
@@ -66,6 +70,15 @@ export function ActiveSessionPanel({
             Processing Voice...
           </div>
         )}
+        {status === 'IDLE' && (
+          <button
+            onClick={startMicManual}
+            className="w-full py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white transition-all shadow-glow-listening focus:outline-none text-sm animate-pulse flex items-center justify-center gap-2"
+          >
+            <Mic className="w-4 h-4 text-white" />
+            Tap to Speak (Nhấn để nói)
+          </button>
+        )}
       </div>
 
       {/* Real-time Voice Spectrum Analyzer */}
@@ -77,14 +90,25 @@ export function ActiveSessionPanel({
         <VoiceVisualizer status={status} rmsVolume={rmsVolume} />
       </div>
 
-      {/* End Session Button */}
-      <button
-        id="btn-stop-recording"
-        onClick={stopRecording}
-        className="w-full py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-status-error to-rose-600 hover:brightness-110 text-white transition-all shadow-glow-rose focus:outline-none text-sm"
-      >
-        End Roleplay Session
-      </button>
+      {/* Action Buttons */}
+      <div className="w-full flex flex-col gap-2.5">
+        {status === 'LISTENING' && (
+          <button
+            id="btn-stop-recording"
+            onClick={stopRecording}
+            className="w-full py-3 px-6 rounded-xl font-bold bg-gradient-to-r from-brand-primary-start to-brand-primary-end hover:brightness-110 text-white transition-all shadow-glow-blue focus:outline-none text-sm flex items-center justify-center gap-2"
+          >
+            Done Speaking / Send (Xong & Gửi đi)
+          </button>
+        )}
+
+        <button
+          onClick={resetSession}
+          className="w-full py-3 px-6 rounded-xl font-bold border border-panel-border hover:bg-panel-inner/80 text-slate-350 transition-colors focus:outline-none text-sm"
+        >
+          Exit Session (Thoát Roleplay)
+        </button>
+      </div>
     </div>
   );
 }
