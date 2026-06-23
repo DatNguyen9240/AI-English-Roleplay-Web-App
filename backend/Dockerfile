@@ -1,7 +1,21 @@
 FROM node:20-slim
 
-# Install OpenSSL required by Prisma
-RUN apt-get update -y && apt-get install -y openssl
+# Install system dependencies (build tools, git, curl, openssl)
+RUN apt-get update -y && apt-get install -y \
+    openssl \
+    build-essential \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone and compile whisper.cpp at /app/whisper
+WORKDIR /app/whisper
+RUN git clone https://github.com/ggerganov/whisper.cpp.git . && \
+    git checkout v1.5.4 && \
+    make -j$(nproc)
+
+# Download the default ggml-base.en.bin model
+RUN bash ./models/download-ggml-model.sh base.en
 
 WORKDIR /usr/src/app
 
