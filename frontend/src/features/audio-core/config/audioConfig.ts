@@ -7,7 +7,7 @@ import { AudioConfig } from 'shared-contracts';
  *   backend/config/audioConfig.js  (sampleRate, bitsPerSample, numChannels)
  */
 export const audioConfig: AudioConfig = {
-  vadVolumeThreshold: 0.015,      // RMS energy threshold for speech detection
+  vadVolumeThreshold: 0.025,      // RMS energy threshold for speech detection
   vadSilenceTimeoutMs: 1500,      // Period of silence in ms to trigger end of speech
   bitsPerSample: 16,              // PCM16 standard
   numChannels: 1,                 // Mono
