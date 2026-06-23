@@ -50,6 +50,8 @@ services:
       - WHISPER_MODEL_PATH=${WHISPER_MODEL_PATH}
     depends_on:
       - db
+    volumes:
+      - ${HOST_WHISPER_DIR:-./whisper}:/usr/src/app/whisper
     networks:
       - ai_network
 
