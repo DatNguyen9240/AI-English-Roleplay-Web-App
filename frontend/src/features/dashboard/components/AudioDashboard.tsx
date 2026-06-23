@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { RecordingStatus } from 'shared-contracts';
 import { ChatMessage } from '@/features/audio-core/hooks/useAudioRecorder';
-import { Volume2, Settings } from 'lucide-react';
+import { Volume2, Settings, Sliders } from 'lucide-react';
 import { DashboardHeader } from './DashboardHeader';
 import { TopicSelector } from './TopicSelector';
 import { ActiveSessionPanel } from './ActiveSessionPanel';
@@ -34,12 +34,6 @@ interface AudioDashboardProps {
   suggestions: string[];
 }
 
-/**
- * Primary audio recording console.
- * Phase 4: Displays user transcript (STT) and streaming AI response (LLM).
- * Refactored: Split into lightweight subcomponents with unified design system tokens.
- * Resolved: Integrated custom browser TTS controls, manual mic commands, and suggestions.
- */
 export function AudioDashboard({
   status,
   rmsVolume,
@@ -73,19 +67,22 @@ export function AudioDashboard({
     status === 'PROCESSING' ? 'Transcribing…' :
     status === 'THINKING'   ? 'AI is responding…' :
     status === 'SPEAKING'   ? 'AI is speaking…' :
-    'Start General Conversation';
+    'Start General Chat';
 
   return (
-    <div className="max-w-6xl w-full bg-panel-bg backdrop-blur-xl border-x-0 sm:border border-panel-border rounded-none sm:rounded-3xl p-4 sm:p-8 shadow-card flex flex-col transition-all duration-300">
+    <div className="w-full max-w-5xl h-[100dvh] sm:h-[80vh] sm:min-h-[680px] sm:max-h-[820px] bg-panel-bg backdrop-blur-3xl border-x-0 sm:border border-panel-border rounded-none sm:rounded-3xl p-4 sm:p-6 shadow-card flex flex-col transition-all duration-500 overflow-hidden">
       
-      {/* App Title Header */}
+      {/* App Header */}
       <DashboardHeader isSessionActive={isSessionActive} />
 
-      {/* Main Grid: Left and Right Columns */}
-      <div className="w-full flex flex-col sm:flex-row gap-4 sm:gap-6 items-stretch">
+      {/* Main Container - Fills all remaining vertical space */}
+      <div className="w-full flex-1 flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-0 overflow-hidden">
         
-        {/* Left Column (State, Volume Visualizer & Connection Controls) */}
-        <div className="w-full sm:w-4/12 bg-panel-inner border border-panel-border/60 rounded-2xl p-4 sm:p-6 flex flex-col items-center justify-between min-h-0 sm:min-h-[340px] shadow-inner">
+        {/* Left Column (Selector/Visualizer & Settings) */}
+        {/* On mobile: hidden if session is active, so the chat workspace occupies the full viewport */}
+        <div className={`w-full sm:w-4/12 bg-slate-900/25 border border-white/5 rounded-2xl p-4 sm:p-5 flex flex-col justify-between min-h-0 shadow-inner overflow-y-auto sm:overflow-visible transition-all duration-300 ${
+          isSessionActive ? 'hidden sm:flex' : 'flex'
+        }`}>
           {!isSessionActive ? (
             <TopicSelector
               topic={topic}
@@ -103,171 +100,187 @@ export function AudioDashboard({
               resetSession={resetSession}
             />
           )}
-          {/* Settings Toggle Button for Mobile */}
-          <button
-            type="button"
-            onClick={() => setShowSettings(!showSettings)}
-            className="w-full py-2.5 px-3 rounded-xl border border-panel-border/60 bg-slate-900/40 hover:bg-slate-900/80 text-xs font-semibold text-slate-300 flex items-center justify-between transition-colors sm:hidden mt-4"
-          >
-            <span className="flex items-center gap-1.5">
-              <Settings className={`w-3.5 h-3.5 text-emerald-400 ${showSettings ? 'animate-spin-slow' : ''}`} />
-              Speech Settings (Cấu hình âm thanh)
-            </span>
-            <span className="text-xs text-slate-400">{showSettings ? 'Hide ▲' : 'Show ▼'}</span>
-          </button>
 
-          {/* Settings Section (Cấu hình STT/TTS) - Collapsible on mobile */}
-          <div className={`w-full flex-col gap-3 text-left ${showSettings ? 'flex mt-2' : 'hidden sm:flex mt-4'}`}>
-            <div className="text-[11px] font-semibold text-slate-450 font-mono uppercase tracking-wider flex items-center gap-1.5 border-t border-panel-border/30 pt-4 w-full">
-              <Settings className="w-3.5 h-3.5 text-emerald-400" />
-              Speech Engine Settings (Cấu hình âm thanh)
-            </div>
+          {/* Settings Section (Cấu hình STT/TTS) */}
+          <div className="w-full flex flex-col gap-3 text-left mt-6 border-t border-white/5 pt-4">
+            <button
+              type="button"
+              onClick={() => setShowSettings(!showSettings)}
+              className="w-full py-2 px-2.5 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 text-[11px] font-bold text-slate-300 flex items-center justify-between transition-all sm:hidden"
+            >
+              <span className="flex items-center gap-1.5">
+                <Sliders className={`w-3.5 h-3.5 text-cyan-400 ${showSettings ? 'rotate-90' : ''} transition-transform`} />
+                Speech Settings (Cấu hình âm thanh)
+              </span>
+              <span className="text-[10px] text-slate-400">{showSettings ? 'Hide ▲' : 'Show ▼'}</span>
+            </button>
 
-            {/* STT Selection */}
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-slate-500 font-sans">
-                Speech-to-Text (Nhận diện giọng nói)
-              </label>
-              <div className="grid grid-cols-2 gap-1 bg-slate-900/60 p-0.5 rounded-lg border border-panel-border/50">
-                <button
-                  type="button"
-                  onClick={() => toggleBrowserStt(true)}
-                  className={`py-1 px-2 rounded-md text-[10px] font-medium transition-all ${
-                    useBrowserStt
-                      ? 'bg-blue-600/30 text-blue-300 font-semibold shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Browser (Trình duyệt)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toggleBrowserStt(false)}
-                  className={`py-1 px-2 rounded-md text-[10px] font-medium transition-all ${
-                    !useBrowserStt
-                      ? 'bg-blue-600/30 text-blue-300 font-semibold shadow-sm'
-                      : 'text-slate-450 hover:text-slate-200'
-                  }`}
-                >
-                  Whisper (Mạnh mẽ)
-                </button>
+            <div className={`w-full flex-col gap-3.5 ${showSettings ? 'flex' : 'hidden sm:flex'}`}>
+              <div className="hidden sm:flex text-[10px] font-bold text-slate-400 font-sans uppercase tracking-wider items-center gap-1.5">
+                <Settings className="w-3.5 h-3.5 text-cyan-400" />
+                Speech Engine Settings
               </div>
-            </div>
 
-            {/* TTS Selection */}
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-slate-500 font-sans">
-                Text-to-Speech (Giọng đọc AI)
-              </label>
-              <div className="grid grid-cols-2 gap-1 bg-slate-900/60 p-0.5 rounded-lg border border-panel-border/50">
-                <button
-                  type="button"
-                  onClick={() => toggleBrowserTts(true)}
-                  className={`py-1 px-2 rounded-md text-[10px] font-medium transition-all ${
-                    useBrowserTts
-                      ? 'bg-blue-600/30 text-blue-300 font-semibold shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Browser (Miễn phí)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toggleBrowserTts(false)}
-                  className={`py-1 px-2 rounded-md text-[10px] font-medium transition-all ${
-                    !useBrowserTts
-                      ? 'bg-blue-600/30 text-blue-300 font-semibold shadow-sm'
-                      : 'text-slate-450 hover:text-slate-200'
-                  }`}
-                >
-                  OpenAI (Tự nhiên)
-                </button>
-              </div>
-            </div>
-
-            {/* Voice Settings Card (Free Browser Voice settings) */}
-            {useBrowserTts && (
-              <div className="w-full mt-2 pt-4 border-t border-panel-border/30 flex flex-col gap-3 text-left">
-                <div className="text-[11px] font-semibold text-slate-450 font-mono uppercase tracking-wider flex items-center gap-1.5">
-                  <Volume2 className="w-3.5 h-3.5 text-blue-400" />
-                  Voice Settings (Giọng đọc)
-                </div>
-                
-                {/* Voice Dropdown */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-slate-500 font-sans">
-                    Voice / Accent (Giọng & Phát âm)
-                  </label>
-                  {availableVoices.length === 0 ? (
-                    <div className="text-[10px] text-amber-500 italic">
-                      Loading browser voices... (Đang tải...)
-                    </div>
-                  ) : (
-                    <select
-                      value={ttsVoiceName || ''}
-                      onChange={(e) => changeTtsVoiceName(e.target.value || null)}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-panel-inner border border-panel-border text-slate-200 text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
-                    >
-                      <option value="">System Default (Mặc định)</option>
-                      {availableVoices.map((voice) => (
-                        <option key={voice.name} value={voice.name}>
-                          {voice.name.replace(/Microsoft|Google|Natural/g, '').trim()} ({voice.lang})
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                {/* Speed Dropdown */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-slate-500 font-sans">
-                    Reading Speed (Tốc độ đọc)
-                  </label>
-                  <select
-                    value={ttsRate}
-                    onChange={(e) => changeTtsRate(parseFloat(e.target.value))}
-                    className="w-full px-2.5 py-1.5 rounded-lg bg-panel-inner border border-panel-border text-slate-200 text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
+              {/* STT Selection */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-slate-400 font-sans font-bold uppercase tracking-wide">
+                  Speech-to-Text
+                </label>
+                <div className="grid grid-cols-2 gap-1 bg-slate-950/50 p-1 rounded-lg border border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => toggleBrowserStt(true)}
+                    className={`py-1.5 px-2 rounded-md text-[10px] font-semibold transition-all ${
+                      useBrowserStt
+                        ? 'bg-cyan-500/20 text-cyan-300 shadow-sm border border-cyan-500/30'
+                        : 'text-slate-500 hover:text-slate-350 border border-transparent'
+                    }`}
                   >
-                    <option value="0.8">0.8x (Chậm)</option>
-                    <option value="1.0">1.0x (Mặc định)</option>
-                    <option value="1.1">1.1x</option>
-                    <option value="1.2">1.2x (Nhanh vừa)</option>
-                    <option value="1.3">1.3x</option>
-                    <option value="1.5">1.5x (Nhanh)</option>
-                    <option value="1.7">1.7x</option>
-                    <option value="2.0">2.0x (Rất nhanh)</option>
-                  </select>
+                    Browser
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleBrowserStt(false)}
+                    className={`py-1.5 px-2 rounded-md text-[10px] font-semibold transition-all ${
+                      !useBrowserStt
+                        ? 'bg-cyan-500/20 text-cyan-300 shadow-sm border border-cyan-500/30'
+                        : 'text-slate-500 hover:text-slate-350 border border-transparent'
+                    }`}
+                  >
+                    Whisper
+                  </button>
                 </div>
               </div>
-            )}
+
+              {/* TTS Selection */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-slate-400 font-sans font-bold uppercase tracking-wide">
+                  Text-to-Speech
+                </label>
+                <div className="grid grid-cols-2 gap-1 bg-slate-950/50 p-1 rounded-lg border border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => toggleBrowserTts(true)}
+                    className={`py-1.5 px-2 rounded-md text-[10px] font-semibold transition-all ${
+                      useBrowserTts
+                        ? 'bg-cyan-500/20 text-cyan-300 shadow-sm border border-cyan-500/30'
+                        : 'text-slate-500 hover:text-slate-350 border border-transparent'
+                    }`}
+                  >
+                    Browser (Free)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleBrowserTts(false)}
+                    className={`py-1.5 px-2 rounded-md text-[10px] font-semibold transition-all ${
+                      !useBrowserTts
+                        ? 'bg-cyan-500/20 text-cyan-300 shadow-sm border border-cyan-500/30'
+                        : 'text-slate-500 hover:text-slate-350 border border-transparent'
+                    }`}
+                  >
+                    OpenAI (HD)
+                  </button>
+                </div>
+              </div>
+
+              {/* Voice Settings Card */}
+              {useBrowserTts && (
+                <div className="w-full mt-1.5 pt-3 border-t border-white/5 flex flex-col gap-3.5">
+                  <div className="text-[10px] font-bold text-slate-400 font-sans uppercase tracking-wider flex items-center gap-1.5">
+                    <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+                    Voice Accent & Speed
+                  </div>
+                  
+                  {/* Voice Dropdown */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-slate-500 font-sans">Accent</label>
+                    {availableVoices.length === 0 ? (
+                      <div className="text-[10px] text-amber-500 italic">
+                        Loading browser voices...
+                      </div>
+                    ) : (
+                      <select
+                        value={ttsVoiceName || ''}
+                        onChange={(e) => changeTtsVoiceName(e.target.value || null)}
+                        className="w-full px-2.5 py-2 rounded-lg bg-slate-950/40 border border-white/5 text-slate-200 text-xs focus:outline-none focus:border-indigo-500/50 cursor-pointer"
+                      >
+                        <option value="">System Default</option>
+                        {availableVoices.map((voice) => (
+                          <option key={voice.name} value={voice.name}>
+                            {voice.name.replace(/Microsoft|Google|Natural/g, '').trim()} ({voice.lang})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Speed Dropdown */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-slate-500 font-sans">Reading Speed</label>
+                    <select
+                      value={ttsRate}
+                      onChange={(e) => changeTtsRate(parseFloat(e.target.value))}
+                      className="w-full px-2.5 py-2 rounded-lg bg-slate-950/40 border border-white/5 text-slate-200 text-xs focus:outline-none focus:border-indigo-500/50 cursor-pointer"
+                    >
+                      <option value="0.8">0.8x (Slow)</option>
+                      <option value="1.0">1.0x (Normal)</option>
+                      <option value="1.2">1.2x</option>
+                      <option value="1.5">1.5x (Fast)</option>
+                      <option value="1.8">1.8x</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Right Column (Dialogue Display, Subtitles, Text Drafting & User Guide) */}
-        <div className="w-full sm:w-8/12 flex flex-col justify-between min-h-0 sm:min-h-[340px]">
+        {/* Right Column (Dialogue Display, Input Bar & Floating Suggestions) */}
+        {/* On mobile active sessions: We render a compact ActiveSessionPanel at the top of the column */}
+        <div className="w-full sm:w-8/12 flex flex-col min-h-0 flex-1 overflow-hidden bg-slate-950/20 sm:border sm:border-white/5 rounded-2xl p-0 sm:p-5">
           {!isSessionActive ? (
             <OnboardingGuide />
           ) : (
-            <ChatInterface
-              chatHistory={chatHistory}
-              status={status}
-              currentPlayingSentence={currentPlayingSentence}
-              highlightedWordIndex={highlightedWordIndex}
-              sendTextMessage={sendTextMessage}
-              suggestions={suggestions}
-              ttsVoiceName={ttsVoiceName}
-              ttsRate={ttsRate}
-              startMicManual={startMicManual}
-              stopRecording={stopRecording}
-            />
+            <>
+              {/* Mobile Active Status Bar */}
+              <div className="block sm:hidden border-b border-white/5 pb-3 mb-2.5">
+                <ActiveSessionPanel
+                  status={status}
+                  rmsVolume={rmsVolume}
+                  stopRecording={stopRecording}
+                  startMicManual={startMicManual}
+                  resetSession={resetSession}
+                />
+              </div>
+              
+              <ChatInterface
+                chatHistory={chatHistory}
+                status={status}
+                currentPlayingSentence={currentPlayingSentence}
+                highlightedWordIndex={highlightedWordIndex}
+                sendTextMessage={sendTextMessage}
+                suggestions={suggestions}
+                ttsVoiceName={ttsVoiceName}
+                ttsRate={ttsRate}
+                startMicManual={startMicManual}
+                stopRecording={stopRecording}
+                useBrowserTts={useBrowserTts}
+                toggleBrowserTts={toggleBrowserTts}
+                useBrowserStt={useBrowserStt}
+                toggleBrowserStt={toggleBrowserStt}
+                changeTtsVoiceName={changeTtsVoiceName}
+                changeTtsRate={changeTtsRate}
+                availableVoices={availableVoices}
+              />
+            </>
           )}
         </div>
 
       </div>
 
       {status === 'ERROR' && (
-        <p className="text-xs text-status-error mt-4 text-center animate-fade-in font-mono">
-          An error occurred. Make sure the backend is running and you have microphone access.
+        <p className="text-[10px] text-rose-400 mt-3 text-center animate-fade-in font-mono uppercase tracking-wide">
+          Error: Please check backend connection and microphone permissions.
         </p>
       )}
     </div>

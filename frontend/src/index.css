@@ -3,82 +3,108 @@
 @tailwind utilities;
 
 :root {
-  /* Panel and containers */
-  --color-panel-bg: rgba(15, 23, 42, 0.6);
-  --color-panel-border: rgba(30, 41, 59, 0.8);
-  --color-panel-inner: rgba(2, 6, 23, 0.4);
+  /* Premium Glassmorphism & Theme Variables */
+  --color-panel-bg: rgba(9, 13, 24, 0.65);
+  --color-panel-border: rgba(255, 255, 255, 0.08);
+  --color-panel-inner: rgba(255, 255, 255, 0.03);
 
-  /* Primary brand gradients */
-  --color-primary-start: #2563eb;
-  --color-primary-end: #4f46e5;
+  /* Primary Brand Gradients (Indigo/Purple/Rose) */
+  --color-primary-start: #6366f1; /* Indigo-500 */
+  --color-primary-end: #a855f7;   /* Violet-500 */
 
-  /* App state colors */
-  --color-listening: #10b981;
-  --color-speaking: #8b5cf6;
-  --color-thinking: #2dd4bf;
-  --color-processing: #f59e0b;
-  --color-error: #f43f5e;
+  /* Interactive States */
+  --color-listening: #06b6d4;   /* Cyan-500 */
+  --color-speaking: #8b5cf6;    /* Violet-500 */
+  --color-thinking: #ec4899;    /* Pink-500 */
+  --color-processing: #f59e0b;  /* Amber-500 */
+  --color-error: #f43f5e;       /* Rose-500 */
 
-  /* Premium shadows and glows */
-  --shadow-card: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  --shadow-glow-blue: 0 0 20px rgba(59, 130, 246, 0.25);
-  --shadow-glow-listening: 0 0 15px rgba(16, 185, 129, 0.35);
-  --shadow-glow-speaking: 0 0 20px rgba(139, 92, 246, 0.5);
-  --shadow-glow-thinking: 0 0 15px rgba(45, 212, 191, 0.3);
-  --shadow-glow-processing: 0 0 15px rgba(245, 158, 11, 0.3);
-  --shadow-glow-error: 0 0 15px rgba(244, 63, 94, 0.35);
+  /* Premium Box Shadows and Ambient Glows */
+  --shadow-card: 0 30px 60px -15px rgba(0, 0, 0, 0.8), 0 0 50px rgba(99, 102, 241, 0.03);
+  --shadow-glow-blue: 0 0 30px rgba(99, 102, 241, 0.35);
+  --shadow-glow-listening: 0 0 30px rgba(6, 182, 212, 0.4);
+  --shadow-glow-speaking: 0 0 30px rgba(139, 92, 246, 0.55);
+  --shadow-glow-thinking: 0 0 30px rgba(236, 72, 153, 0.4);
+  --shadow-glow-processing: 0 0 30px rgba(245, 158, 11, 0.4);
+  --shadow-glow-error: 0 0 30px rgba(244, 63, 94, 0.4);
 }
 
+body {
+  margin: 0;
+  padding: 0;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  background-color: #030712;
+  overflow-x: hidden;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes spin-reverse-slow {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+@keyframes pulseHaloListening {
+  0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.5); }
+  70% { box-shadow: 0 0 0 12px rgba(6, 182, 212, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+}
+@keyframes pulseHaloSpeaking {
+  0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.5); }
+  70% { box-shadow: 0 0 0 12px rgba(139, 92, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+}
 
 @layer utilities {
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes spin-slow {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-  @keyframes spin-reverse-slow {
-    from { transform: rotate(360deg); }
-    to { transform: rotate(0deg); }
-  }
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-3px); }
+  .animate-fade-in {
+    animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
   .animate-spin-slow {
-    animation: spin-slow 10s linear infinite;
+    animation: spin-slow 14s linear infinite;
   }
   .animate-spin-reverse-slow {
-    animation: spin-reverse-slow 12s linear infinite;
+    animation: spin-reverse-slow 16s linear infinite;
   }
   .animate-float {
-    animation: float 3s ease-in-out infinite;
+    animation: float 3.5s ease-in-out infinite;
+  }
+  .animate-halo-listening {
+    animation: pulseHaloListening 2s infinite;
+  }
+  .animate-halo-speaking {
+    animation: pulseHaloSpeaking 2s infinite;
   }
 }
 
-/* Custom scrollbar styling for modern browsers */
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #334155; /* slate-700 */
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 9999px;
+  transition: background 0.2s;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569; /* slate-600 */
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* For Firefox */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #334155 transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
