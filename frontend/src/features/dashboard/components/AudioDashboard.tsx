@@ -76,7 +76,7 @@ export function AudioDashboard({
       <DashboardHeader isSessionActive={isSessionActive} />
 
       {/* Main Container - Fills all remaining vertical space */}
-      <div className="w-full flex-1 flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-0 overflow-hidden">
+      <div className="w-full flex-1 flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-0 overflow-hidden h-full">
         
         {/* Left Column (Selector/Visualizer & Settings) */}
         {/* On mobile: hidden if session is active, so the chat workspace occupies the full viewport */}
@@ -241,7 +241,7 @@ export function AudioDashboard({
           {!isSessionActive ? (
             <OnboardingGuide />
           ) : (
-            <div className="flex flex-col flex-1 min-h-0 h-full">
+            <div className="flex flex-col flex-1 min-h-0">
               {/* Mobile Active Status Bar */}
               <div className="block sm:hidden border-b border-white/5 pb-3 mb-2.5">
                 <ActiveSessionPanel
