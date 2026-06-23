@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { RecordingStatus } from 'shared-contracts';
 import { ChatMessage } from '@/features/audio-core/hooks/useAudioRecorder';
-import { Volume2 } from 'lucide-react';
+import { Volume2, Mic, MicOff, Loader2 } from 'lucide-react';
 
 interface ChatInterfaceProps {
   chatHistory: ChatMessage[];
@@ -12,6 +12,8 @@ interface ChatInterfaceProps {
   suggestions: string[];
   ttsVoiceName: string | null;
   ttsRate: number;
+  startMicManual?: () => void;
+  stopRecording?: () => void;
 }
 
 export function ChatInterface({
@@ -23,6 +25,8 @@ export function ChatInterface({
   suggestions,
   ttsVoiceName,
   ttsRate,
+  startMicManual,
+  stopRecording,
 }: ChatInterfaceProps): React.ReactElement {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -183,13 +187,13 @@ export function ChatInterface({
       {/* Suggested Hint / Sample Answer */}
       {suggestions.length > 0 && (status === 'IDLE' || status === 'LISTENING') && (
         <div className="w-full border-t border-panel-border/30 pt-3 flex flex-col gap-1.5 animate-fade-in text-left">
-          <div className="text-[10px] text-slate-450 font-mono tracking-wider uppercase">
+          <div className="text-[10px] text-slate-455 font-mono tracking-wider uppercase">
             Suggested Reply (Gợi ý trả lời - Click để dùng)
           </div>
           <button
             type="button"
             onClick={() => handleSuggestionClick(suggestions[0])}
-            className="w-full text-xs text-slate-350 hover:text-blue-300 bg-panel-inner border border-panel-border px-4 py-3 rounded-xl transition-all duration-200 text-left shadow-sm hover:shadow leading-relaxed"
+            className="w-full text-xs text-slate-350 hover:text-blue-300 bg-panel-inner border border-panel-border px-3 sm:px-4 py-2 sm:py-3 rounded-xl transition-all duration-200 text-left shadow-sm hover:shadow leading-relaxed"
           >
             {suggestions[0]}
           </button>
@@ -212,7 +216,7 @@ export function ChatInterface({
               textarea.value = '';
             }
           }}
-          className="w-full flex gap-3 items-end"
+          className="w-full flex gap-2 sm:gap-3 items-end"
         >
           <textarea
             ref={textareaRef}
@@ -231,6 +235,36 @@ export function ChatInterface({
             }}
             className="flex-1 px-4 py-2.5 rounded-xl bg-panel-inner border border-panel-border text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-blue-500 transition-colors resize-none"
           />
+
+          {/* Mobile-only Mic/Stop Action Button */}
+          {status === 'LISTENING' && stopRecording ? (
+            <button
+              type="button"
+              onClick={stopRecording}
+              className="sm:hidden p-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white transition-all shadow-glow-listening h-[44px] w-[44px] flex items-center justify-center animate-pulse"
+              title="Done Speaking (Xong)"
+            >
+              <Mic className="w-5 h-5 text-white" />
+            </button>
+          ) : status === 'IDLE' && startMicManual ? (
+            <button
+              type="button"
+              onClick={startMicManual}
+              className="sm:hidden p-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-panel-border text-slate-350 transition-all h-[44px] w-[44px] flex items-center justify-center"
+              title="Tap to Speak (Nói)"
+            >
+              <MicOff className="w-5 h-5 text-slate-400" />
+            </button>
+          ) : (status === 'PROCESSING' || status === 'THINKING' || status === 'SPEAKING') ? (
+            <button
+              type="button"
+              disabled
+              className="sm:hidden p-3 rounded-xl bg-slate-900/60 border border-panel-border/30 text-slate-600 h-[44px] w-[44px] flex items-center justify-center"
+            >
+              <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
+            </button>
+          ) : null}
+
           <button
             type="submit"
             disabled={status === 'PROCESSING' || status === 'THINKING'}
