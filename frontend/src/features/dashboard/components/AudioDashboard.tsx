@@ -80,11 +80,11 @@ export function AudioDashboard({
       </div>
 
       {/* Main Container - Fills all remaining vertical space */}
-      <div className="w-full flex-1 flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-0 overflow-hidden h-full">
+      <div className="w-full flex-1 flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-0 overflow-hidden">
         
         {/* Left Column (Selector/Visualizer & Settings) */}
         {/* On mobile: hidden if session is active, so the chat workspace occupies the full viewport */}
-        <div className={`w-full sm:w-4/12 bg-slate-900/25 border border-white/5 rounded-2xl p-4 sm:p-5 flex flex-col justify-between min-h-0 shadow-inner overflow-y-auto sm:overflow-visible transition-all duration-300 h-full ${
+        <div className={`w-full sm:w-4/12 bg-slate-900/25 border border-white/5 rounded-2xl p-4 sm:p-5 flex flex-col justify-between min-h-0 shadow-inner overflow-y-auto sm:overflow-visible transition-all duration-300 ${
           isSessionActive ? 'hidden sm:flex' : 'flex'
         }`}>
           {!isSessionActive ? (
@@ -241,11 +241,11 @@ export function AudioDashboard({
 
         {/* Right Column (Dialogue Display, Input Bar & Floating Suggestions) */}
         {/* On mobile active sessions: We render a compact ActiveSessionPanel at the top of the column */}
-        <div className="w-full sm:w-8/12 flex flex-col min-h-0 flex-1 h-full overflow-hidden bg-slate-950/20 sm:border sm:border-white/5 rounded-2xl p-0 sm:p-5">
+        <div className="w-full sm:w-8/12 flex flex-col min-h-0 flex-1 overflow-hidden bg-slate-950/20 sm:border sm:border-white/5 rounded-2xl p-0 sm:p-5">
           {!isSessionActive ? (
             <OnboardingGuide />
           ) : (
-            <div className="flex flex-col flex-1 min-h-0 h-full">
+            <div className="flex flex-col flex-1 min-h-0">
               {/* Mobile Active Status Bar */}
               <div className="block sm:hidden border-b border-white/5 pb-3 mb-2.5 px-4 pt-4">
                 <ActiveSessionPanel
