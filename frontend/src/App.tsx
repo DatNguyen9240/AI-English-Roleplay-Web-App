@@ -33,6 +33,7 @@ function App(): React.ReactElement {
     ttsRate,
     changeTtsRate,
     availableVoices,
+    suggestions,
   } = useAudioRecorder(config.apiUrl);
 
   const isSessionActive = chatHistory.length > 0 || (status !== 'IDLE' && status !== 'ERROR');
