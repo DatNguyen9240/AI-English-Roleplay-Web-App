@@ -267,15 +267,6 @@ export class PlaybackQueueManager {
         return;
       }
 
-      // Pre-calculate exact character ranges for each word in sentenceText to prevent index mapping mismatches
-      let currentCharIndex = 0;
-      const wordRanges = chunk.words.map((w) => {
-        const start = currentCharIndex;
-        const end = start + w.text.length;
-        currentCharIndex = end + 1; // +1 for the joining space
-        return { start, end };
-      });
-
       // Create SpeechSynthesisUtterance
       const utterance = new SpeechSynthesisUtterance(sentenceText);
       utterance.lang = 'en-US';
@@ -298,47 +289,51 @@ export class PlaybackQueueManager {
       // Set playback speed
       utterance.rate = this.ttsRate;
 
+      // Estimate timings for each word (Base duration: 115ms + 40ms per character, scaled by speed rate)
+      const ttsRate = this.ttsRate || 1.0;
+      let currentWordDelay = 0;
+      const wordTimings = chunk.words.map((w) => {
+        const duration = (w.text.length * 40 + 115) / ttsRate;
+        const start = currentWordDelay;
+        currentWordDelay += duration;
+        return { start, duration };
+      });
+
+      // Track active timeouts for this chunk
+      const chunkTimeouts: ReturnType<typeof setTimeout>[] = [];
+
       utterance.onstart = () => {
         logger.log(`[BrowserTTS] Playback started: "${sentenceText}"`);
         if (this.onSentenceStart) {
           this.onSentenceStart(sentenceText, chunk.requestId);
         }
-      };
 
-      utterance.onboundary = (event) => {
-        if (event.name === 'word') {
-          const charIndex = event.charIndex;
-          let wordIndex = -1;
+        // Schedule word highlight timeouts
+        wordTimings.forEach((timing, idx) => {
+          const timeout = setTimeout(() => {
+            this.activeTimeouts.delete(timeout);
+            const tIndex = chunkTimeouts.indexOf(timeout);
+            if (tIndex > -1) chunkTimeouts.splice(tIndex, 1);
 
-          // Find which word range contains the boundary charIndex
-          for (let i = 0; i < wordRanges.length; i++) {
-            const range = wordRanges[i];
-            if (charIndex >= range.start && charIndex <= range.end) {
-              wordIndex = i;
-              break;
+            if (this.onWordSpoken && this.isPlaying) {
+              this.onWordSpoken(chunk.words[idx].text, idx, sentenceText, chunk.words, chunk.requestId);
             }
-          }
-
-          // Fallback matching for slight browser boundary alignment offsets
-          if (wordIndex === -1) {
-            for (let i = 0; i < wordRanges.length; i++) {
-              const range = wordRanges[i];
-              if (charIndex >= range.start && charIndex < range.end + 2) {
-                wordIndex = i;
-                break;
-              }
-            }
-          }
-
-          if (wordIndex !== -1 && this.onWordSpoken) {
-            this.onWordSpoken(chunk.words[wordIndex].text, wordIndex, sentenceText, chunk.words, chunk.requestId);
-          }
-        }
+          }, timing.start);
+          
+          this.activeTimeouts.add(timeout);
+          chunkTimeouts.push(timeout);
+        });
       };
 
       utterance.onend = () => {
         logger.log(`[BrowserTTS] Playback finished: "${sentenceText}"`);
         this.activeUtterancesCount--;
+
+        // Clean up any remaining timeouts for this chunk
+        chunkTimeouts.forEach((t) => {
+          clearTimeout(t);
+          this.activeTimeouts.delete(t);
+        });
 
         this.checkQueueEmpty(chunk.requestId);
         if (this.isPlaying) {
@@ -349,6 +344,12 @@ export class PlaybackQueueManager {
       utterance.onerror = (err) => {
         logger.error('[BrowserTTS] Speech synthesis error:', err);
         this.activeUtterancesCount--;
+
+        // Clean up any remaining timeouts for this chunk
+        chunkTimeouts.forEach((t) => {
+          clearTimeout(t);
+          this.activeTimeouts.delete(t);
+        });
 
         this.checkQueueEmpty(chunk.requestId);
         if (this.isPlaying) {
