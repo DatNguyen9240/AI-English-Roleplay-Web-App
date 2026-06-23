@@ -256,6 +256,17 @@ export class PlaybackQueueManager {
     try {
       const sentenceText = chunk.words.map((w) => w.text).join(' ');
 
+      // Skip playing if the chunk is only a structural header label (e.g. "**Passage:**" or "Passage:")
+      const cleaned = sentenceText.replace(/[\*\s:]/g, '').toLowerCase();
+      if (cleaned === 'passage') {
+        logger.log('[PlaybackQueueManager] Skipping speaking structural label:', sentenceText);
+        this.checkQueueEmpty(chunk.requestId);
+        if (this.isPlaying) {
+          this.processQueue();
+        }
+        return;
+      }
+
       // Pre-calculate exact character ranges for each word in sentenceText to prevent index mapping mismatches
       let currentCharIndex = 0;
       const wordRanges = chunk.words.map((w) => {

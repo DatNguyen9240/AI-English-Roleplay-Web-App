@@ -66,8 +66,15 @@ export function ChatInterface({
     // Cancel any active speaking
     window.speechSynthesis.cancel();
 
+    // Strip structural labels like "**Passage:**", "Passage:" and markdown formatting
+    const cleanedText = text
+      .replace(/\*\*passage:\*\*/gi, '')
+      .replace(/\bpassage:\s*/gi, '')
+      .replace(/\*\*/g, '')
+      .trim();
+
     // Create a new utterance
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(cleanedText);
     utterance.lang = 'en-US';
 
     // Find the voice matching ttsVoiceName
