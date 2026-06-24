@@ -539,31 +539,12 @@ export function AudioDashboard({
                           const startIndex = message.text.indexOf(currentPlayingSentence);
                           const beforeText = message.text.substring(0, startIndex);
                           const afterText = message.text.substring(startIndex + currentPlayingSentence.length);
-                          const words = currentPlayingSentence.split(' ');
 
                           return (
                             <span>
                               {beforeText && <span className="opacity-60">{beforeText}</span>}
-                              <span>
-                                {words.map((word, wIdx) => {
-                                  // Highlight current word and read words of the active sentence
-                                  const isWordActive = highlightedWordIndex === wIdx;
-                                  const isWordRead = highlightedWordIndex !== -1 && wIdx < highlightedWordIndex;
-                                  return (
-                                    <span
-                                      key={wIdx}
-                                      className={
-                                        isWordActive
-                                          ? "bg-white/30 text-white font-semibold px-0.5 rounded transition-all duration-75"
-                                          : isWordRead || highlightedWordIndex === -1
-                                          ? "bg-white/10 text-neutral-200"
-                                          : "text-neutral-300"
-                                      }
-                                    >
-                                      {word}{wIdx < words.length - 1 ? ' ' : ''}
-                                    </span>
-                                  );
-                                })}
+                              <span className="bg-white/15 text-white px-1.5 py-0.5 rounded">
+                                {currentPlayingSentence}
                               </span>
                               {afterText && <span className="opacity-60">{afterText}</span>}
                             </span>
