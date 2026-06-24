@@ -652,11 +652,21 @@ export function AudioDashboard({
               disabled={status === 'PROCESSING' || status === 'THINKING' || part2Phase === 'prep'}
               size="icon"
               className={`h-10 w-10 rounded-full border transition-all duration-300 ${
-                isRecording
+                status === 'SPEAKING'
+                  ? 'bg-red-600 border-red-600 text-white hover:bg-red-500 hover:border-red-500 cursor-pointer animate-pulse'
+                  : isRecording
                   ? 'bg-white border-white text-black animate-pulse-neutral'
-                  : 'bg-neutral-900 border-neutral-800 text-white hover:border-neutral-600 hover:bg-neutral-850'
+                  : 'bg-neutral-900 border-neutral-800 text-white hover:border-neutral-600 hover:bg-neutral-850 cursor-pointer'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={part2Phase === 'prep' ? "Mic locked during prep" : isRecording ? "Stop Recording" : "Start Voice Input"}
+              title={
+                part2Phase === 'prep'
+                  ? "Mic locked during prep"
+                  : status === 'SPEAKING'
+                  ? "Interrupt AI Tutor"
+                  : isRecording
+                  ? "Stop Recording"
+                  : "Start Voice Input"
+              }
             >
               <Mic className="w-4 h-4" />
             </Button>
