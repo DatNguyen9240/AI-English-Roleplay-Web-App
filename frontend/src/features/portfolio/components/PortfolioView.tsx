@@ -34,39 +34,37 @@ export function PortfolioView({ activeTab, setActiveTab }: PortfolioViewProps): 
 
       <div className="relative z-10 w-full max-w-4xl mx-auto flex flex-col min-h-screen px-4 sm:px-6 md:px-8 py-0 sm:py-4">
         {/* 1. Header Area */}
-        <header className="grid grid-cols-3 items-center py-4 border-b border-neutral-800 shrink-0 gap-4 mb-8">
-          <div className="flex items-center gap-2 min-w-0 justify-start">
+        <header className="relative flex justify-between items-center py-4 border-b border-neutral-800 shrink-0 gap-4 mb-8">
+          <div className="flex items-center gap-2 min-w-0">
             <Sparkles className="w-5 h-5 text-white animate-pulse" />
             <span className="font-bold tracking-tight text-white text-base sm:text-lg whitespace-nowrap">
               <DecryptedText text="Developer Hub" animateOn="load" speed={50} maxIterations={5} />
             </span>
           </div>
 
-          {/* Navigation Switcher */}
-          <div className="flex justify-center shrink-0">
-            <div className="flex bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg text-xs">
-              <button
-                onClick={() => setActiveTab('practice')}
-                className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${activeTab === 'practice'
-                  ? 'bg-white text-black font-semibold'
-                  : 'text-neutral-400 hover:text-white'
-                  }`}
-              >
-                Practice
-              </button>
-              <button
-                onClick={() => setActiveTab('about')}
-                className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${activeTab === 'about'
-                  ? 'bg-white text-black font-semibold'
-                  : 'text-neutral-400 hover:text-white'
-                  }`}
-              >
-                About Me
-              </button>
-            </div>
+          {/* Navigation Switcher (Absolutely Centered) */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg text-xs flex z-20">
+            <button
+              onClick={() => setActiveTab('practice')}
+              className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${activeTab === 'practice'
+                ? 'bg-white text-black font-semibold'
+                : 'text-neutral-400 hover:text-white'
+                }`}
+            >
+              Practice
+            </button>
+            <button
+              onClick={() => setActiveTab('about')}
+              className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${activeTab === 'about'
+                ? 'bg-white text-black font-semibold'
+                : 'text-neutral-400 hover:text-white'
+                }`}
+            >
+              About Me
+            </button>
           </div>
 
-          {/* Right Spacer for balanced centering */}
+          {/* Right Spacer for layout alignment */}
           <div className="flex items-center justify-end" />
         </header>
 

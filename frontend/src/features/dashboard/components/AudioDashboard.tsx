@@ -201,8 +201,8 @@ export function AudioDashboard({
     <div className="w-full max-w-4xl mx-auto flex flex-col h-[100dvh] justify-between px-0 sm:px-6 md:px-8 py-0 sm:py-4 font-sans text-neutral-200 overflow-hidden">
       
       {/* 1. Header Area */}
-      <header className="grid grid-cols-3 items-center py-4 border-b border-neutral-800 px-4 sm:px-0 shrink-0">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0 justify-start">
+      <header className="relative flex justify-between items-center py-4 border-b border-neutral-800 px-4 sm:px-0 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <span className="font-bold tracking-tight text-white text-base sm:text-lg whitespace-nowrap hidden sm:inline-block">AI Tutor</span>
           {isSessionActive && (
             <div className="flex items-center gap-1.5">
@@ -228,33 +228,31 @@ export function AudioDashboard({
           )}
         </div>
 
-        {/* Navigation Switcher */}
-        <div className="flex justify-center shrink-0">
-          <div className="flex bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg text-xs">
-            <button
-              onClick={() => setActiveTab('practice')}
-              className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${
-                activeTab === 'practice' 
-                  ? 'bg-white text-black font-semibold' 
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              Practice
-            </button>
-            <button
-              onClick={() => setActiveTab('about')}
-              className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${
-                activeTab === 'about' 
-                  ? 'bg-white text-black font-semibold' 
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              About Me
-            </button>
-          </div>
+        {/* Navigation Switcher (Absolutely Centered) */}
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg text-xs flex z-20">
+          <button
+            onClick={() => setActiveTab('practice')}
+            className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${
+              activeTab === 'practice' 
+                ? 'bg-white text-black font-semibold' 
+                : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            Practice
+          </button>
+          <button
+            onClick={() => setActiveTab('about')}
+            className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${
+              activeTab === 'about' 
+                ? 'bg-white text-black font-semibold' 
+                : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            About Me
+          </button>
         </div>
 
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center gap-2">
           <Button
             type="button"
             onClick={() => setShowSettings(!showSettings)}
