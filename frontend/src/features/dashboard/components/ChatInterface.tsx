@@ -227,7 +227,7 @@ export function ChatInterface({
       </div>
 
       {/* Message Box Areas */}
-      <div className="flex-1 overflow-y-auto pl-4 sm:pl-0 pr-4 sm:pr-1 pb-24 sm:pb-4 flex flex-col gap-4 scroll-smooth min-h-0 mb-3">
+      <div className="flex-1 overflow-y-auto pl-4 sm:pl-0 pr-4 sm:pr-1 pb-4 flex flex-col gap-4 scroll-smooth min-h-0 mb-3">
         {chatHistory.length === 0 ? (
           <div className="text-center text-slate-500 text-xs py-8 italic font-sans">
             Connection established. Say hello to your AI tutor!
@@ -380,10 +380,10 @@ export function ChatInterface({
       )}
 
       {/* Unified Input & Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent flex justify-center">
+      <div className="w-full border-t border-white/5 pt-3 sm:pt-3.5 pb-4 sm:pb-0 px-4 sm:px-0 flex-shrink-0 mt-auto">
         <form
           onSubmit={handleSubmit}
-          className="w-full max-w-2xl flex items-end gap-2 bg-slate-900/90 border border-white/15 rounded-2xl p-1.5 pl-3.5 shadow-2xl relative focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all duration-300 backdrop-blur-md"
+          className="w-full flex items-end gap-2 bg-slate-900/50 border border-white/10 rounded-2xl p-1.5 pl-3.5 shadow-inner relative focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all duration-300"
         >
           <textarea
             ref={textareaRef}
