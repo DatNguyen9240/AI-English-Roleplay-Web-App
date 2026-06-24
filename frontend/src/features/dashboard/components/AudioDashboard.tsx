@@ -178,20 +178,30 @@ export function AudioDashboard({
   };
 
   return (
-    <div className="w-full max-w-none flex flex-col h-screen justify-between px-0 py-4 font-sans text-neutral-200">
+    <div className="w-full max-w-4xl mx-auto flex flex-col h-screen justify-between px-[15px] sm:px-6 md:px-8 py-4 font-sans text-neutral-200">
       
       {/* 1. Header Area */}
-      <header className="flex justify-between items-center py-4 px-4 sm:px-0 border-b border-neutral-800">
-        <div className="flex items-center gap-3">
-          <span className="font-bold tracking-tight text-white text-lg whitespace-nowrap">AI Tutor</span>
+      <header className="flex justify-between items-center py-4 border-b border-neutral-800">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <span className="font-bold tracking-tight text-white text-base sm:text-lg whitespace-nowrap hidden sm:inline-block">AI Tutor</span>
           {isSessionActive && (
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5">
               <span className="text-[10px] bg-neutral-900 text-neutral-400 border border-neutral-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono whitespace-nowrap">
-                {activeIeltsPart === 'general' ? 'General Chat' : `IELTS Part ${activeIeltsPart.replace('part', '')}`}
+                {activeIeltsPart === 'general' ? (
+                  <>
+                    <span className="hidden sm:inline">General Chat</span>
+                    <span className="sm:hidden">General</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="hidden sm:inline">IELTS Part {activeIeltsPart.replace('part', '')}</span>
+                    <span className="sm:hidden">IELTS P{activeIeltsPart.replace('part', '')}</span>
+                  </>
+                )}
               </span>
               {activeIeltsPart !== 'general' && (
                 <span className="text-[10px] bg-neutral-900/50 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono whitespace-nowrap">
-                  Target Band {targetBand}
+                  <span className="hidden sm:inline">Target </span>Band {targetBand}
                 </span>
               )}
             </div>
@@ -228,7 +238,7 @@ export function AudioDashboard({
 
       {/* Settings Panel */}
       {showSettings && (
-        <div className="bg-neutral-950 border-y sm:border border-neutral-900 sm:rounded-lg p-4 mx-4 sm:mx-0 my-2 space-y-4 animate-fade-in text-left">
+        <div className="bg-neutral-950 border border-neutral-900 rounded-lg p-4 my-2 space-y-4 animate-fade-in text-left">
           <div className="text-xs font-bold text-white uppercase tracking-wider font-mono">
             Speech & Audio Settings
           </div>
@@ -313,7 +323,7 @@ export function AudioDashboard({
       <div className="flex-1 flex flex-col min-h-0 py-6">
         {!isSessionActive ? (
           /* Start Screen (Minimalist Topic Selector) */
-          <div className="flex-1 flex flex-col justify-center items-center max-w-xl mx-auto w-full px-4 sm:px-0 text-center animate-fade-in">
+          <div className="flex-1 flex flex-col justify-center items-center max-w-xl mx-auto w-full text-center animate-fade-in">
             <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-white mb-2 whitespace-nowrap">
               <BlurText text="Practice Speaking English" delay={45} animateBy="words" />
             </h1>
@@ -373,7 +383,7 @@ export function AudioDashboard({
           </div>
         ) : (
           /* Active Chat Workspace */
-          <div className="flex-1 flex flex-col min-h-0 bg-neutral-950 border-y sm:border border-neutral-900 sm:rounded-xl overflow-hidden shadow-inner">
+          <div className="flex-1 flex flex-col min-h-0 bg-neutral-950 border border-neutral-900 rounded-xl overflow-hidden shadow-inner">
             
             {/* IELTS Part 2 (Cue Card) countdown timer visualizer */}
             {activeIeltsPart === 'part2' && part2Phase !== 'idle' && part2Phase !== 'done' && (
@@ -524,7 +534,7 @@ export function AudioDashboard({
 
       {/* 3. Bottom Input Controls Area */}
       {isSessionActive && (
-        <footer className="space-y-4 px-4 sm:px-0">
+        <footer className="space-y-4 pt-4">
           
           {/* Floating Suggestion Answer Chips */}
           {suggestions.length > 0 && (
