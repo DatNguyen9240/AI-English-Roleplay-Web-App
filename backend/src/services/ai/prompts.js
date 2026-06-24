@@ -40,6 +40,13 @@ function getTopicPrompt(topic, targetBand = '7.0', ieltsPart = 'general') {
         '- Communication Goal: Keep conversations accessible, slow-paced, and encouraging.\n' +
         '- Suggestions Block Requirement: Provide exactly 1 model answer matching Band 5.0 complexity. Use simple sentences, basic connectors (and, but, because), and common vocabulary that is easy for a beginner to repeat and understand.\n';
       break;
+    case '5.5':
+      bandGuideline = 
+        '# Learner Target Level: IELTS Band 5.5 (Intermediate User)\n' +
+        '- Vocabulary Complexity: Basic to pre-intermediate vocabulary with simple collocations.\n' +
+        '- Communication Goal: Keep conversations clear, steady, and supportive as they transition to intermediate topics.\n' +
+        '- Suggestions Block Requirement: Provide exactly 1 model answer matching Band 5.5 complexity. Use simple and compound sentences with basic connectors (and, but, because, also), and clear vocabulary.\n';
+      break;
     case '6.0':
       bandGuideline = 
         '# Learner Target Level: IELTS Band 6.0 (Competent User)\n' +
@@ -47,12 +54,26 @@ function getTopicPrompt(topic, targetBand = '7.0', ieltsPart = 'general') {
         '- Communication Goal: Encourage the user to express detailed ideas and connect thoughts.\n' +
         '- Suggestions Block Requirement: Provide exactly 1 model answer matching Band 6.0 complexity. Use a mix of simple and complex sentence structures, clear ideas, and common vocabulary with some attempt at less common words (e.g., essential, challenging, benefits).\n';
       break;
+    case '6.5':
+      bandGuideline = 
+        '# Learner Target Level: IELTS Band 6.5 (Upper-Intermediate User)\n' +
+        '- Vocabulary Complexity: Upper-intermediate vocabulary with attempts at less common phrasing.\n' +
+        '- Communication Goal: Support expressing detailed arguments with some complex grammatical structures.\n' +
+        '- Suggestions Block Requirement: Provide exactly 1 model answer matching Band 6.5 complexity. Use a mix of simple and complex sentences, precise vocabulary, and some idiomatic expressions.\n';
+      break;
     case '7.0':
       bandGuideline = 
         '# Learner Target Level: IELTS Band 7.0 (Good User)\n' +
         '- Vocabulary Complexity: High-level, natural vocabulary and some idiomatic expressions.\n' +
         '- Communication Goal: Support complex opinions, reasoning, and abstract discussions.\n' +
         '- Suggestions Block Requirement: Provide exactly 1 model answer matching Band 7.0 complexity. Demonstrate good grammatical control, complex clauses, a range of precise vocabulary, and discourse markers (e.g., "On the one hand", "Consequently").\n';
+      break;
+    case '7.5':
+      bandGuideline = 
+        '# Learner Target Level: IELTS Band 7.5 (Very Good User)\n' +
+        '- Vocabulary Complexity: Advanced vocabulary, good idiomatic phrasing, and precise word choice.\n' +
+        '- Communication Goal: Engage in abstract, logical discussions with complex reasoning.\n' +
+        '- Suggestions Block Requirement: Provide exactly 1 model answer matching Band 7.5 complexity. Use complex sentence structures, advanced connectors, and natural-sounding vocabulary.\n';
       break;
     case '8.0':
     default:

@@ -393,8 +393,11 @@ export function AudioDashboard({
                     className="w-full h-11 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-white text-xs sm:text-sm focus:outline-none focus:border-neutral-500 cursor-pointer"
                   >
                     <option value="5.0">Band 5.0 (Moderate)</option>
+                    <option value="5.5">Band 5.5</option>
                     <option value="6.0">Band 6.0 (Competent)</option>
+                    <option value="6.5">Band 6.5</option>
                     <option value="7.0">Band 7.0 (Good)</option>
+                    <option value="7.5">Band 7.5</option>
                     <option value="8.0">Band 8.0+ (Expert)</option>
                   </select>
                 </div>
