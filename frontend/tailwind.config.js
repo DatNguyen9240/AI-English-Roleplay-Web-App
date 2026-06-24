@@ -7,34 +7,47 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        sans: ['"Geist Variable"', 'system-ui', 'sans-serif'],
       },
       colors: {
-        panel: {
-          bg: 'var(--color-panel-bg)',
-          border: 'var(--color-panel-border)',
-          inner: 'var(--color-panel-inner)',
+        border: "var(--border)",
+        input: "var(--input)",
+        ring: "var(--ring)",
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+        primary: {
+          DEFAULT: "var(--primary)",
+          foreground: "var(--primary-foreground)",
         },
-        brand: {
-          'primary-start': 'var(--color-primary-start)',
-          'primary-end': 'var(--color-primary-end)',
+        secondary: {
+          DEFAULT: "var(--secondary)",
+          foreground: "var(--secondary-foreground)",
         },
-        status: {
-          listening: 'var(--color-listening)',
-          speaking: 'var(--color-speaking)',
-          thinking: 'var(--color-thinking)',
-          processing: 'var(--color-processing)',
-          error: 'var(--color-error)',
+        destructive: {
+          DEFAULT: "var(--destructive)",
+          foreground: "var(--destructive-foreground)",
+        },
+        muted: {
+          DEFAULT: "var(--muted)",
+          foreground: "var(--muted-foreground)",
+        },
+        accent: {
+          DEFAULT: "var(--accent)",
+          foreground: "var(--accent-foreground)",
+        },
+        popover: {
+          DEFAULT: "var(--popover)",
+          foreground: "var(--popover-foreground)",
+        },
+        card: {
+          DEFAULT: "var(--card)",
+          foreground: "var(--card-foreground)",
         },
       },
-      boxShadow: {
-        card: 'var(--shadow-card)',
-        'glow-blue': 'var(--shadow-glow-blue)',
-        'glow-listening': 'var(--shadow-glow-listening)',
-        'glow-speaking': 'var(--shadow-glow-speaking)',
-        'glow-thinking': 'var(--shadow-glow-thinking)',
-        'glow-processing': 'var(--shadow-glow-processing)',
-        'glow-error': 'var(--shadow-glow-error)',
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
       },
     },
   },

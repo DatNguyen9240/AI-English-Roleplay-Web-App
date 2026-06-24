@@ -11,9 +11,7 @@ const { LocalAudioStorage } = require('@services/storageService');
 const { MockSttService, WhisperSttService } = require('@services/audio/sttService');
 const { MockLlmService, OpenRouterLlmService } = require('@services/ai/llmService');
 const { MockTtsService, OpenAiTtsService } = require('@services/audio/ttsService');
-const { socketAuth } = require('@middleware/authMiddleware');
 const registerAudioHandlers = require('@sockets/audioSocket');
-const authRoutes = require('@routes/auth');
 
 // ── Service instantiation (Dependency Injection) ────────────────────────────
 
@@ -82,8 +80,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 
-// Routes
-app.use('/api/auth', authRoutes);
+
 
 // Health check
 app.get('/health', async (_req, res) => {
@@ -109,12 +106,10 @@ const io = new Server(server, {
   },
 });
 
-io.use(socketAuth);
-
 io.on('connection', (socket) => {
   logger.info(
-    { socketId: socket.id, user: socket.user },
-    'USER_CONNECTED (WebSocket Connection Established & Authenticated)'
+    { socketId: socket.id },
+    'USER_CONNECTED (WebSocket Connection Established)'
   );
   registerAudioHandlers(io, socket, logger, storageService, sttService, llmService, ttsService);
 });

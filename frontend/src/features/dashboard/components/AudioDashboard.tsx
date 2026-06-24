@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RecordingStatus } from 'shared-contracts';
 import { ChatMessage } from '@/features/audio-core/hooks/useAudioRecorder';
-import { Volume2, Settings, Sliders } from 'lucide-react';
-import { DashboardHeader } from './DashboardHeader';
-import { TopicSelector } from './TopicSelector';
-import { ActiveSessionPanel } from './ActiveSessionPanel';
-import { OnboardingGuide } from './OnboardingGuide';
-import { ChatInterface } from './ChatInterface';
+import { Mic, Send, RotateCcw, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { BlurText } from '@/components/react-bits/BlurText';
+import { Magnet } from '@/components/react-bits/Magnet';
 
 interface AudioDashboardProps {
   isRecording: boolean;
@@ -35,258 +34,288 @@ interface AudioDashboardProps {
 }
 
 export function AudioDashboard({
+  isRecording,
   status,
   rmsVolume,
+  transcript,
   chatHistory,
   currentPlayingSentence,
-  highlightedWordIndex,
   startRecording,
   stopRecording,
   sendTextMessage,
-  useBrowserTts,
-  toggleBrowserTts,
-  useBrowserStt,
-  toggleBrowserStt,
-  startMicManual,
   resetSession,
-  ttsVoiceName,
-  changeTtsVoiceName,
-  ttsRate,
-  changeTtsRate,
-  availableVoices,
   suggestions,
 }: AudioDashboardProps): React.ReactElement {
-  const [topic, setTopic] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
-
-  const isDisabled = status === 'PROCESSING' || status === 'THINKING' || status === 'SPEAKING';
+  const [topicInput, setTopicInput] = useState('');
+  const [textInput, setTextInput] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  
   const isSessionActive = chatHistory.length > 0 || (status !== 'IDLE' && status !== 'ERROR');
+  const isLlmResponding = status === 'THINKING' || status === 'PROCESSING';
 
-  const startButtonLabel =
-    status === 'ERROR'      ? 'Retry' :
-    status === 'PROCESSING' ? 'Transcribing…' :
-    status === 'THINKING'   ? 'AI is responding…' :
-    status === 'SPEAKING'   ? 'AI is speaking…' :
-    'Start General Chat';
+  // Auto-scroll to the bottom of the chat
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatHistory, transcript, status]);
+
+  const handleStartPractice = (e: React.FormEvent) => {
+    e.preventDefault();
+    startRecording(topicInput.trim() || undefined);
+  };
+
+  const handleSendText = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!textInput.trim() || isLlmResponding) return;
+    sendTextMessage(textInput.trim());
+    setTextInput('');
+  };
+
+  const handleMicClick = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording(topicInput.trim() || undefined);
+    }
+  };
 
   return (
-    <div className={`w-full max-w-5xl h-[100dvh] sm:h-[80vh] sm:min-h-[680px] sm:max-h-[820px] bg-panel-bg backdrop-blur-3xl border-x-0 sm:border border-panel-border rounded-none sm:rounded-3xl shadow-card flex flex-col transition-all duration-500 overflow-hidden ${
-      isSessionActive ? 'p-0 sm:p-6' : 'p-4 sm:p-6'
-    }`}>
+    <div className="w-full max-w-2xl mx-auto flex flex-col h-[85vh] justify-between p-4 font-sans text-neutral-200">
       
-      {/* App Header */}
-      <div className={isSessionActive ? 'hidden sm:block' : 'block'}>
-        <DashboardHeader isSessionActive={isSessionActive} />
-      </div>
-
-      {/* Main Container - Fills all remaining vertical space */}
-      <div className="w-full flex-1 flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-0 overflow-hidden">
-        
-        {/* Left Column (Selector/Visualizer & Settings) */}
-        {/* On mobile: hidden if session is active, so the chat workspace occupies the full viewport */}
-        <div className={`w-full sm:w-4/12 bg-slate-900/25 border border-white/5 rounded-2xl p-4 sm:p-5 flex flex-col justify-between min-h-0 shadow-inner overflow-y-auto sm:overflow-visible transition-all duration-300 ${
-          isSessionActive ? 'hidden sm:flex' : 'flex'
-        }`}>
-          {!isSessionActive ? (
-            <TopicSelector
-              topic={topic}
-              setTopic={setTopic}
-              isDisabled={isDisabled}
-              startRecording={startRecording}
-              startButtonLabel={startButtonLabel}
-            />
-          ) : (
-            <ActiveSessionPanel
-              status={status}
-              rmsVolume={rmsVolume}
-              stopRecording={stopRecording}
-              startMicManual={startMicManual}
-              resetSession={resetSession}
-            />
+      {/* 1. Header Area */}
+      <header className="flex justify-between items-center py-4 border-b border-neutral-800">
+        <div className="flex items-center gap-2">
+          <span className="font-bold tracking-tight text-white text-lg">AI Tutor</span>
+          {isSessionActive && (
+            <span className="text-[10px] bg-neutral-900 text-neutral-400 border border-neutral-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+              Active Session
+            </span>
           )}
+        </div>
+        {isSessionActive && (
+          <Button
+            onClick={resetSession}
+            variant="outline"
+            size="sm"
+            title="Reset practice topic"
+            className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition-colors duration-200"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>New Topic</span>
+          </Button>
+        )}
+      </header>
 
-          {/* Settings Section (Cấu hình STT/TTS) */}
-          <div className="w-full flex flex-col gap-3 text-left mt-6 border-t border-white/5 pt-4">
-            <button
-              type="button"
-              onClick={() => setShowSettings(!showSettings)}
-              className="w-full py-2 px-2.5 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 text-[11px] font-bold text-slate-300 flex items-center justify-between transition-all sm:hidden"
-            >
-              <span className="flex items-center gap-1.5">
-                <Sliders className={`w-3.5 h-3.5 text-cyan-400 ${showSettings ? 'rotate-90' : ''} transition-transform`} />
-                Speech Settings (Cấu hình âm thanh)
-              </span>
-              <span className="text-[10px] text-slate-400">{showSettings ? 'Hide ▲' : 'Show ▼'}</span>
-            </button>
-
-            <div className={`w-full flex-col gap-3.5 ${showSettings ? 'flex' : 'hidden sm:flex'}`}>
-              <div className="hidden sm:flex text-[10px] font-bold text-slate-400 font-sans uppercase tracking-wider items-center gap-1.5">
-                <Settings className="w-3.5 h-3.5 text-cyan-400" />
-                Speech Engine Settings
-              </div>
-
-              {/* STT Selection */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-slate-400 font-sans font-bold uppercase tracking-wide">
-                  Speech-to-Text
-                </label>
-                <div className="grid grid-cols-2 gap-1 bg-slate-950/50 p-1 rounded-lg border border-white/5">
-                  <button
-                    type="button"
-                    onClick={() => toggleBrowserStt(true)}
-                    className={`py-1.5 px-2 rounded-md text-[10px] font-semibold transition-all ${
-                      useBrowserStt
-                        ? 'bg-cyan-500/20 text-cyan-300 shadow-sm border border-cyan-500/30'
-                        : 'text-slate-500 hover:text-slate-350 border border-transparent'
-                    }`}
+      {/* 2. Main Practice Workspace */}
+      <div className="flex-1 flex flex-col min-h-0 py-6">
+        {!isSessionActive ? (
+          /* Start Screen (Minimalist Topic Selector) */
+          <div className="flex-1 flex flex-col justify-center items-center max-w-md mx-auto w-full text-center animate-fade-in">
+            <h1 className="text-2xl font-bold tracking-tight text-white mb-2">
+              <BlurText text="Practice Speaking English" delay={45} />
+            </h1>
+            <p className="text-sm text-neutral-400 mb-8">
+              Type a custom scenario to practice roleplaying, or leave it blank to start a general chat.
+            </p>
+            
+            <form onSubmit={handleStartPractice} className="w-full space-y-4">
+              <Input
+                type="text"
+                value={topicInput}
+                onChange={(e) => setTopicInput(e.target.value)}
+                placeholder="e.g. Job interview at a tech company"
+                className="w-full h-11 px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-lg text-white placeholder-neutral-600 focus-visible:border-neutral-500 focus-visible:ring-1 focus-visible:ring-neutral-500 transition-all text-sm"
+              />
+              <Button
+                type="submit"
+                className="w-full h-11 rounded-lg font-bold bg-white hover:bg-neutral-200 text-black transition-colors duration-200 text-sm flex items-center justify-center gap-2 shadow"
+              >
+                <span>Start Practice</span>
+              </Button>
+            </form>
+          </div>
+        ) : (
+          /* Active Chat Workspace */
+          <div className="flex-1 flex flex-col min-h-0 bg-neutral-950 border border-neutral-900 rounded-xl overflow-hidden shadow-inner">
+            
+            {/* Scrollable messages log */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {chatHistory.map((message) => {
+                const isUser = message.sender === 'user';
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex flex-col max-w-[85%] ${
+                      isUser ? 'ml-auto items-end' : 'mr-auto items-start'
+                    } animate-fade-in`}
                   >
-                    Browser
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => toggleBrowserStt(false)}
-                    className={`py-1.5 px-2 rounded-md text-[10px] font-semibold transition-all ${
-                      !useBrowserStt
-                        ? 'bg-cyan-500/20 text-cyan-300 shadow-sm border border-cyan-500/30'
-                        : 'text-slate-500 hover:text-slate-350 border border-transparent'
-                    }`}
-                  >
-                    Whisper
-                  </button>
-                </div>
-              </div>
-
-              {/* TTS Selection */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-slate-400 font-sans font-bold uppercase tracking-wide">
-                  Text-to-Speech
-                </label>
-                <div className="grid grid-cols-2 gap-1 bg-slate-950/50 p-1 rounded-lg border border-white/5">
-                  <button
-                    type="button"
-                    onClick={() => toggleBrowserTts(true)}
-                    className={`py-1.5 px-2 rounded-md text-[10px] font-semibold transition-all ${
-                      useBrowserTts
-                        ? 'bg-cyan-500/20 text-cyan-300 shadow-sm border border-cyan-500/30'
-                        : 'text-slate-500 hover:text-slate-350 border border-transparent'
-                    }`}
-                  >
-                    Browser (Free)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => toggleBrowserTts(false)}
-                    className={`py-1.5 px-2 rounded-md text-[10px] font-semibold transition-all ${
-                      !useBrowserTts
-                        ? 'bg-cyan-500/20 text-cyan-300 shadow-sm border border-cyan-500/30'
-                        : 'text-slate-500 hover:text-slate-350 border border-transparent'
-                    }`}
-                  >
-                    OpenAI (HD)
-                  </button>
-                </div>
-              </div>
-
-              {/* Voice Settings Card */}
-              {useBrowserTts && (
-                <div className="w-full mt-1.5 pt-3 border-t border-white/5 flex flex-col gap-3.5">
-                  <div className="text-[10px] font-bold text-slate-400 font-sans uppercase tracking-wider flex items-center gap-1.5">
-                    <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
-                    Voice Accent & Speed
-                  </div>
-                  
-                  {/* Voice Dropdown */}
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-slate-500 font-sans">Accent</label>
-                    {availableVoices.length === 0 ? (
-                      <div className="text-[10px] text-amber-500 italic">
-                        Loading browser voices...
-                      </div>
-                    ) : (
-                      <select
-                        value={ttsVoiceName || ''}
-                        onChange={(e) => changeTtsVoiceName(e.target.value || null)}
-                        className="w-full px-2.5 py-2 rounded-lg bg-slate-950/40 border border-white/5 text-slate-200 text-xs focus:outline-none focus:border-indigo-500/50 cursor-pointer"
-                      >
-                        <option value="">System Default</option>
-                        {availableVoices.map((voice) => (
-                          <option key={voice.name} value={voice.name}>
-                            {voice.name.replace(/Microsoft|Google|Natural/g, '').trim()} ({voice.lang})
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-
-                  {/* Speed Dropdown */}
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-slate-500 font-sans">Reading Speed</label>
-                    <select
-                      value={ttsRate}
-                      onChange={(e) => changeTtsRate(parseFloat(e.target.value))}
-                      className="w-full px-2.5 py-2 rounded-lg bg-slate-950/40 border border-white/5 text-slate-200 text-xs focus:outline-none focus:border-indigo-500/50 cursor-pointer"
+                    <div className="text-[10px] text-neutral-500 mb-1 uppercase font-mono tracking-wider">
+                      {isUser ? 'You' : 'Tutor'}
+                    </div>
+                    <div
+                      className={`px-4 py-2.5 rounded-xl text-sm leading-relaxed ${
+                        isUser
+                          ? 'bg-neutral-800 text-white'
+                          : 'bg-neutral-900/40 border border-neutral-800 text-neutral-200'
+                      }`}
                     >
-                      <option value="0.8">0.8x (Slow)</option>
-                      <option value="1.0">1.0x (Normal)</option>
-                      <option value="1.2">1.2x</option>
-                      <option value="1.5">1.5x (Fast)</option>
-                      <option value="1.8">1.8x</option>
-                    </select>
+                      {/* Highlight current spoken sentence if AI */}
+                      {!isUser && currentPlayingSentence && message.text.includes(currentPlayingSentence) ? (
+                        <span>
+                          {message.text.split(currentPlayingSentence).map((part, index, arr) => (
+                            <React.Fragment key={index}>
+                              {part}
+                              {index < arr.length - 1 && (
+                                <span className="bg-white text-black px-1 rounded-sm">
+                                  {currentPlayingSentence}
+                                </span>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </span>
+                      ) : (
+                        message.text
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Real-time browser speech recognition transcript feedback */}
+              {isRecording && transcript && (
+                <div className="flex flex-col max-w-[85%] ml-auto items-end opacity-70 animate-fade-in">
+                  <div className="text-[10px] text-neutral-500 mb-1 uppercase font-mono tracking-wider">
+                    Drafting...
+                  </div>
+                  <div className="px-4 py-2.5 rounded-xl text-sm leading-relaxed bg-neutral-900 text-neutral-300 italic border border-neutral-800 border-dashed">
+                    {transcript}
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-        </div>
 
-        {/* Right Column (Dialogue Display, Input Bar & Floating Suggestions) */}
-        {/* On mobile active sessions: We render a compact ActiveSessionPanel at the top of the column */}
-        <div className="w-full sm:w-8/12 flex flex-col min-h-0 flex-1 overflow-hidden bg-slate-950/20 sm:border sm:border-white/5 rounded-2xl p-0 sm:p-5">
-          {!isSessionActive ? (
-            <OnboardingGuide />
-          ) : (
-            <div className="flex flex-col flex-1 min-h-0 h-full">
-              {/* Mobile Active Status Bar */}
-              <div className="block sm:hidden border-b border-white/5 pb-3 mb-2.5 px-4 pt-4">
-                <ActiveSessionPanel
-                  status={status}
-                  rmsVolume={rmsVolume}
-                  stopRecording={stopRecording}
-                  startMicManual={startMicManual}
-                  resetSession={resetSession}
+              {/* AI is thinking/typing status indicator inside chat bubble */}
+              {isLlmResponding && chatHistory[chatHistory.length - 1]?.sender !== 'ai' && (
+                <div className="flex flex-col max-w-[80%] mr-auto items-start animate-fade-in">
+                  <div className="text-[10px] text-neutral-500 mb-1 uppercase font-mono tracking-wider">
+                    Tutor
+                  </div>
+                  <div className="px-4 py-2.5 rounded-xl text-sm bg-neutral-900/40 border border-neutral-800 text-neutral-400 italic">
+                    Thinking...
+                  </div>
+                </div>
+              )}
+
+              <div ref={chatEndRef} />
+            </div>
+            
+            {/* Audio RMS volume bar/visualizer - Minimalist single border-t indicator */}
+            {isRecording && (
+              <div className="w-full h-1 bg-neutral-900 overflow-hidden">
+                <div
+                  className="h-full bg-white transition-all duration-75"
+                  style={{ width: `${Math.min(100, rmsVolume * 300)}%` }}
                 />
               </div>
-              
-              <ChatInterface
-                chatHistory={chatHistory}
-                status={status}
-                currentPlayingSentence={currentPlayingSentence}
-                highlightedWordIndex={highlightedWordIndex}
-                sendTextMessage={sendTextMessage}
-                suggestions={suggestions}
-                ttsVoiceName={ttsVoiceName}
-                ttsRate={ttsRate}
-                startMicManual={startMicManual}
-                stopRecording={stopRecording}
-                useBrowserTts={useBrowserTts}
-                toggleBrowserTts={toggleBrowserTts}
-                useBrowserStt={useBrowserStt}
-                toggleBrowserStt={toggleBrowserStt}
-                changeTtsVoiceName={changeTtsVoiceName}
-                changeTtsRate={changeTtsRate}
-                availableVoices={availableVoices}
-              />
-            </div>
-          )}
-        </div>
-
+            )}
+          </div>
+        )}
       </div>
 
-      {status === 'ERROR' && (
-        <p className="text-[10px] text-rose-400 mt-3 text-center animate-fade-in font-mono uppercase tracking-wide">
-          Error: Please check backend connection and microphone permissions.
-        </p>
+      {/* 3. Bottom Input Controls Area */}
+      {isSessionActive && (
+        <footer className="space-y-4">
+          
+          {/* Floating Suggestion Answer Chips */}
+          {suggestions.length > 0 && (
+            <div className="flex flex-wrap gap-2 justify-center py-2 animate-fade-in">
+              {suggestions.map((suggestion, idx) => (
+                <Button
+                  key={idx}
+                  onClick={() => sendTextMessage(suggestion)}
+                  disabled={isLlmResponding}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs px-3 py-1 rounded-full border border-neutral-800 hover:border-neutral-600 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white transition-all duration-200 text-left max-w-full truncate disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {suggestion}
+                </Button>
+              ))}
+            </div>
+          )}
+
+          {/* Core Chat Inputs */}
+          <div className="flex items-center gap-3">
+            <form onSubmit={handleSendText} className="flex-1 flex gap-2">
+              <Input
+                type="text"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                disabled={isLlmResponding}
+                placeholder={isLlmResponding ? "Tutor is writing..." : "Type your reply..."}
+                className="flex-1 h-10 px-4 py-2.5 bg-neutral-900 border border-neutral-800 rounded-lg text-white placeholder-neutral-600 focus-visible:border-neutral-500 focus-visible:ring-1 focus-visible:ring-neutral-500 transition-all text-sm disabled:opacity-55"
+              />
+              <Button
+                type="submit"
+                disabled={!textInput.trim() || isLlmResponding}
+                size="icon"
+                className="h-10 w-10 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </form>
+
+            {/* Magnetic Mic Button using React Bits Magnet */}
+            <Magnet range={70} strength={25} disabled={status === 'PROCESSING' || status === 'THINKING'}>
+              <Button
+                onClick={handleMicClick}
+                disabled={status === 'PROCESSING' || status === 'THINKING'}
+                size="icon"
+                className={`h-10 w-10 rounded-full border transition-all duration-300 ${
+                  isRecording
+                    ? 'bg-white border-white text-black animate-pulse-neutral'
+                    : 'bg-neutral-900 border-neutral-800 text-white hover:border-neutral-600 hover:bg-neutral-850'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={isRecording ? "Stop Recording" : "Start Voice Input"}
+              >
+                <Mic className="w-4 h-4" />
+              </Button>
+            </Magnet>
+          </div>
+
+          {/* Simple status hint bar */}
+          <div className="text-center h-4">
+            {status === 'LISTENING' && (
+              <span className="text-[10px] text-neutral-400 font-mono tracking-wide uppercase animate-pulse">
+                Listening... Click mic to complete
+              </span>
+            )}
+            {status === 'PROCESSING' && (
+              <span className="text-[10px] text-neutral-500 font-mono tracking-wide uppercase">
+                Processing voice transcription...
+              </span>
+            )}
+            {status === 'THINKING' && (
+              <span className="text-[10px] text-neutral-500 font-mono tracking-wide uppercase">
+                AI Tutor is response streaming...
+              </span>
+            )}
+            {status === 'SPEAKING' && (
+              <span className="text-[10px] text-neutral-400 font-mono tracking-wide uppercase">
+                AI Tutor is speaking...
+              </span>
+            )}
+          </div>
+        </footer>
       )}
+
+      {status === 'ERROR' && (
+        <div className="flex items-center justify-center gap-1.5 text-xs text-rose-500 mt-2 font-mono uppercase tracking-wide bg-rose-500/10 border border-rose-500/20 p-2 rounded-lg">
+          <AlertCircle className="w-4 h-4" />
+          <span>Error: Connection issues. Please refresh and try again.</span>
+        </div>
+      )}
+
     </div>
   );
 }
