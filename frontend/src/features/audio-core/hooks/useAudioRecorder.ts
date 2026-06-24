@@ -368,7 +368,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
           ? {
               ...msg,
               id: `ai-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-              text: msg.text.trim() + '... [interrupted]',
             }
           : msg
       )
@@ -393,7 +392,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
           ? {
               ...msg,
               id: `ai-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-              text: msg.text.trim() + '... [interrupted]',
             }
           : msg
       )
@@ -455,7 +453,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
             ? {
                 ...msg,
                 id: `ai-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-                text: msg.text.trim() + '... [interrupted]',
               }
             : msg
         )

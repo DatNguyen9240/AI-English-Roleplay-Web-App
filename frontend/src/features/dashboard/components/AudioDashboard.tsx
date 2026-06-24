@@ -543,28 +543,29 @@ export function AudioDashboard({
 
                           return (
                             <span>
-                              {beforeText && <span className="opacity-40 text-neutral-400">{beforeText}</span>}
-                              <span className="bg-white/15 text-white">
+                              {beforeText && <span className="opacity-60">{beforeText}</span>}
+                              <span>
                                 {words.map((word, wIdx) => {
-                                  // If highlightedWordIndex is active (>= 0), reveal words progressively.
-                                  // If highlightedWordIndex is -1, fallback to showing the entire active sentence.
-                                  const isWordSpoken = highlightedWordIndex === -1 || wIdx <= highlightedWordIndex;
+                                  // Highlight current word and read words of the active sentence
+                                  const isWordActive = highlightedWordIndex === wIdx;
+                                  const isWordRead = highlightedWordIndex !== -1 && wIdx < highlightedWordIndex;
                                   return (
                                     <span
                                       key={wIdx}
-                                      className={isWordSpoken ? "transition-opacity duration-150" : "select-none pointer-events-none"}
-                                      style={isWordSpoken ? undefined : { opacity: 0 }}
+                                      className={
+                                        isWordActive
+                                          ? "bg-white/30 text-white font-semibold px-0.5 rounded transition-all duration-75"
+                                          : isWordRead || highlightedWordIndex === -1
+                                          ? "bg-white/10 text-neutral-200"
+                                          : "text-neutral-300"
+                                      }
                                     >
                                       {word}{wIdx < words.length - 1 ? ' ' : ''}
                                     </span>
                                   );
                                 })}
                               </span>
-                              {afterText && (
-                                <span className="select-none pointer-events-none" style={{ opacity: 0 }}>
-                                  {afterText}
-                                </span>
-                              )}
+                              {afterText && <span className="opacity-60">{afterText}</span>}
                             </span>
                           );
                         })()
