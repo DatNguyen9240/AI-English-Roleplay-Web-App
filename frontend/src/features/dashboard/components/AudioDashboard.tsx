@@ -30,6 +30,8 @@ interface AudioDashboardProps {
   toggleBrowserTts: (val: boolean) => void;
   useBrowserStt: boolean;
   toggleBrowserStt: (val: boolean) => void;
+  activeTab: 'practice' | 'about';
+  setActiveTab: (tab: 'practice' | 'about') => void;
 }
 
 export function AudioDashboard({
@@ -56,6 +58,8 @@ export function AudioDashboard({
   toggleBrowserTts,
   useBrowserStt,
   toggleBrowserStt,
+  activeTab,
+  setActiveTab,
 }: AudioDashboardProps): React.ReactElement {
   const [topicInput, setTopicInput] = useState('');
   const [textInput, setTextInput] = useState('');
@@ -217,6 +221,31 @@ export function AudioDashboard({
             </div>
           )}
         </div>
+
+        {/* Navigation Switcher */}
+        <div className="flex bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg text-xs">
+          <button
+            onClick={() => setActiveTab('practice')}
+            className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${
+              activeTab === 'practice' 
+                ? 'bg-white text-black font-semibold' 
+                : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            Practice
+          </button>
+          <button
+            onClick={() => setActiveTab('about')}
+            className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${
+              activeTab === 'about' 
+                ? 'bg-white text-black font-semibold' 
+                : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            About Me
+          </button>
+        </div>
+
         <div className="flex items-center gap-2">
           <Button
             type="button"
