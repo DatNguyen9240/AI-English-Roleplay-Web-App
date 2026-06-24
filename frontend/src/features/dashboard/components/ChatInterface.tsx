@@ -109,7 +109,7 @@ export function ChatInterface({
   };
 
   return (
-    <div className="w-full flex flex-col justify-between flex-1 animate-fade-in min-h-0 relative">
+    <div className="w-full flex flex-col justify-between flex-1 animate-fade-in min-h-0 relative h-full">
       
       {/* Chat Room Header / Status Indicator */}
       <div className="flex justify-between items-center border-b border-white/5 pb-2.5 mb-2.5 px-4 sm:px-0 relative flex-shrink-0">

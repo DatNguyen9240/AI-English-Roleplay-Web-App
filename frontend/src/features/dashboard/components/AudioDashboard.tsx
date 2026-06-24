@@ -245,7 +245,7 @@ export function AudioDashboard({
           {!isSessionActive ? (
             <OnboardingGuide />
           ) : (
-            <div className="flex flex-col flex-1 min-h-0">
+            <div className="flex flex-col flex-1 min-h-0 h-full">
               {/* Mobile Active Status Bar */}
               <div className="block sm:hidden border-b border-white/5 pb-3 mb-2.5 px-4 pt-4">
                 <ActiveSessionPanel

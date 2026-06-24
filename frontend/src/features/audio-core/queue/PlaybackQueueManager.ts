@@ -289,18 +289,59 @@ export class PlaybackQueueManager {
       // Set playback speed
       utterance.rate = this.ttsRate;
 
-      // Estimate timings for each word (Base duration: 115ms + 40ms per character, scaled by speed rate)
-      const ttsRate = this.ttsRate || 1.0;
-      let currentWordDelay = 0;
-      const wordTimings = chunk.words.map((w) => {
-        const duration = (w.text.length * 40 + 115) / ttsRate;
-        const start = currentWordDelay;
-        currentWordDelay += duration;
-        return { start, duration };
-      });
-
       // Track active timeouts for this chunk
       const chunkTimeouts: ReturnType<typeof setTimeout>[] = [];
+      let hasFiredBoundary = false;
+      let fallbackTimeout: ReturnType<typeof setTimeout> | null = null;
+
+      // Map words to character boundaries in the sentence
+      let charAccumulator = 0;
+      const wordCharIndices = chunk.words.map((w) => {
+        const start = charAccumulator;
+        const end = charAccumulator + w.text.length;
+        charAccumulator += w.text.length + 1; // plus 1 for space
+        return { start, end };
+      });
+
+      // Local helper to clean up active timeouts for this chunk
+      const cleanupTimeouts = () => {
+        if (fallbackTimeout) {
+          clearTimeout(fallbackTimeout);
+          this.activeTimeouts.delete(fallbackTimeout);
+          fallbackTimeout = null;
+        }
+        chunkTimeouts.forEach((t) => {
+          clearTimeout(t);
+          this.activeTimeouts.delete(t);
+        });
+        chunkTimeouts.length = 0;
+      };
+
+      // Local helper to trigger estimated word timing timeouts if onboundary fails to fire
+      const triggerFallbackTimings = () => {
+        logger.warn('[BrowserTTS] onboundary event did not fire. Falling back to estimated word timings.');
+        const ttsRate = this.ttsRate || 1.0;
+        let currentWordDelay = 0;
+
+        chunk.words.forEach((word, idx) => {
+          const duration = (word.text.length * 40 + 115) / ttsRate;
+          const startDelay = currentWordDelay;
+          currentWordDelay += duration;
+
+          const timeout = setTimeout(() => {
+            this.activeTimeouts.delete(timeout);
+            const tIndex = chunkTimeouts.indexOf(timeout);
+            if (tIndex > -1) chunkTimeouts.splice(tIndex, 1);
+
+            if (this.onWordSpoken && this.isPlaying) {
+              this.onWordSpoken(word.text, idx, sentenceText, chunk.words, chunk.requestId);
+            }
+          }, startDelay);
+
+          this.activeTimeouts.add(timeout);
+          chunkTimeouts.push(timeout);
+        });
+      };
 
       utterance.onstart = () => {
         logger.log(`[BrowserTTS] Playback started: "${sentenceText}"`);
@@ -308,33 +349,39 @@ export class PlaybackQueueManager {
           this.onSentenceStart(sentenceText, chunk.requestId);
         }
 
-        // Schedule word highlight timeouts
-        wordTimings.forEach((timing, idx) => {
-          const timeout = setTimeout(() => {
-            this.activeTimeouts.delete(timeout);
-            const tIndex = chunkTimeouts.indexOf(timeout);
-            if (tIndex > -1) chunkTimeouts.splice(tIndex, 1);
+        // Trigger fallback if no boundary events are received within 400ms
+        fallbackTimeout = setTimeout(() => {
+          fallbackTimeout = null;
+          if (!hasFiredBoundary) {
+            triggerFallbackTimings();
+          }
+        }, 400);
+        this.activeTimeouts.add(fallbackTimeout);
+      };
 
-            if (this.onWordSpoken && this.isPlaying) {
-              this.onWordSpoken(chunk.words[idx].text, idx, sentenceText, chunk.words, chunk.requestId);
-            }
-          }, timing.start);
-          
-          this.activeTimeouts.add(timeout);
-          chunkTimeouts.push(timeout);
-        });
+      utterance.onboundary = (event) => {
+        if (event.name === 'word') {
+          hasFiredBoundary = true;
+          if (fallbackTimeout) {
+            clearTimeout(fallbackTimeout);
+            this.activeTimeouts.delete(fallbackTimeout);
+            fallbackTimeout = null;
+          }
+
+          const charIndex = event.charIndex;
+          const wordIndex = wordCharIndices.findIndex(
+            (pos) => charIndex >= pos.start && charIndex < pos.end
+          );
+          if (wordIndex !== -1 && this.onWordSpoken && this.isPlaying) {
+            this.onWordSpoken(chunk.words[wordIndex].text, wordIndex, sentenceText, chunk.words, chunk.requestId);
+          }
+        }
       };
 
       utterance.onend = () => {
         logger.log(`[BrowserTTS] Playback finished: "${sentenceText}"`);
         this.activeUtterancesCount--;
-
-        // Clean up any remaining timeouts for this chunk
-        chunkTimeouts.forEach((t) => {
-          clearTimeout(t);
-          this.activeTimeouts.delete(t);
-        });
-
+        cleanupTimeouts();
         this.checkQueueEmpty(chunk.requestId);
         if (this.isPlaying) {
           this.processQueue();
@@ -344,13 +391,7 @@ export class PlaybackQueueManager {
       utterance.onerror = (err) => {
         logger.error('[BrowserTTS] Speech synthesis error:', err);
         this.activeUtterancesCount--;
-
-        // Clean up any remaining timeouts for this chunk
-        chunkTimeouts.forEach((t) => {
-          clearTimeout(t);
-          this.activeTimeouts.delete(t);
-        });
-
+        cleanupTimeouts();
         this.checkQueueEmpty(chunk.requestId);
         if (this.isPlaying) {
           this.processQueue();
