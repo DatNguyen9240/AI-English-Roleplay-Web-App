@@ -201,7 +201,7 @@ export function AudioDashboard({
     <div className="w-full max-w-4xl mx-auto flex flex-col h-[100dvh] justify-between px-0 sm:px-6 md:px-8 py-0 sm:py-4 font-sans text-neutral-200 overflow-hidden">
       
       {/* 1. Header Area */}
-      <header className="relative flex justify-between items-center py-4 border-b border-neutral-800 px-4 sm:px-0 shrink-0">
+      <header className="relative flex justify-between items-center h-16 border-b border-neutral-800 px-4 sm:px-0 shrink-0">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <span className="font-bold tracking-tight text-white text-base sm:text-lg whitespace-nowrap hidden sm:inline-block">AI Tutor</span>
           {isSessionActive && (
