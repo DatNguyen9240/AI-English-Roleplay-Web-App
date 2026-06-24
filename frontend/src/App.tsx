@@ -44,6 +44,7 @@ function App(): React.ReactElement {
         currentPlayingSentence={currentPlayingSentence}
         startRecording={startRecording}
         stopRecording={stopRecording}
+        startMicManual={startMicManual}
         sendTextMessage={sendTextMessage}
         resetSession={resetSession}
         suggestions={suggestions}

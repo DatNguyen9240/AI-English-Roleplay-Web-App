@@ -15,6 +15,7 @@ interface AudioDashboardProps {
   currentPlayingSentence?: string;
   startRecording: (topic?: string) => void;
   stopRecording: () => void;
+  startMicManual: () => void;
   sendTextMessage: (text: string) => void;
   resetSession: () => void;
   suggestions: string[];
@@ -34,6 +35,7 @@ export function AudioDashboard({
   currentPlayingSentence,
   startRecording,
   stopRecording,
+  startMicManual,
   sendTextMessage,
   resetSession,
   suggestions,
@@ -74,7 +76,7 @@ export function AudioDashboard({
     if (isRecording) {
       stopRecording();
     } else {
-      startRecording(topicInput.trim() || undefined);
+      startMicManual();
     }
   };
 
@@ -106,6 +108,7 @@ export function AudioDashboard({
           </Button>
           {isSessionActive && (
             <Button
+              type="button"
               onClick={resetSession}
               variant="outline"
               size="sm"
@@ -341,6 +344,7 @@ export function AudioDashboard({
             </form>
 
             <Button
+              type="button"
               onClick={handleMicClick}
               disabled={status === 'PROCESSING' || status === 'THINKING'}
               size="icon"
