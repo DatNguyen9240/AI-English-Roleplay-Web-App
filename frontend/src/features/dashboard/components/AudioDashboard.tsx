@@ -529,20 +529,37 @@ export function AudioDashboard({
                           : 'bg-neutral-900/40 border border-neutral-800 text-neutral-200 pr-10'
                       }`}
                     >
-                      {/* Highlight the sentence being read by AI */}
+                      {/* Highlight the sentence being read by AI with sync-to-speech reveal */}
                       {!isUser && currentPlayingSentence && message.text.includes(currentPlayingSentence) ? (
                         (() => {
                           const startIndex = message.text.indexOf(currentPlayingSentence);
                           const beforeText = message.text.substring(0, startIndex);
                           const afterText = message.text.substring(startIndex + currentPlayingSentence.length);
+                          const words = currentPlayingSentence.split(' ');
 
                           return (
                             <span>
                               {beforeText && <span className="opacity-40 text-neutral-400">{beforeText}</span>}
                               <span className="bg-white/15 text-white">
-                                {currentPlayingSentence}
+                                {words.map((word, wIdx) => {
+                                  // If highlightedWordIndex is active (>= 0), reveal words progressively.
+                                  // If highlightedWordIndex is -1, fallback to showing the entire active sentence.
+                                  const isWordSpoken = highlightedWordIndex === -1 || wIdx <= highlightedWordIndex;
+                                  return (
+                                    <span
+                                      key={wIdx}
+                                      className={isWordSpoken ? "transition-opacity duration-150" : "opacity-0 select-none pointer-events-none"}
+                                    >
+                                      {word}{wIdx < words.length - 1 ? ' ' : ''}
+                                    </span>
+                                  );
+                                })}
                               </span>
-                              {afterText && <span className="opacity-40 text-neutral-400">{afterText}</span>}
+                              {afterText && (
+                                <span className="opacity-0 select-none pointer-events-none">
+                                  {afterText}
+                                </span>
+                              )}
                             </span>
                           );
                         })()
@@ -662,7 +679,15 @@ export function AudioDashboard({
                 value={textInput}
                 onChange={(e) => setTextInput(e.target.value)}
                 disabled={isLlmResponding || part2Phase === 'prep'}
-                placeholder={part2Phase === 'prep' ? "Preparing..." : isLlmResponding ? "Tutor is writing..." : "Type your reply..."}
+                placeholder={
+                  part2Phase === 'prep'
+                    ? "Preparing..."
+                    : isLlmResponding
+                    ? "Tutor is writing..."
+                    : isRecording
+                    ? "Listening... Speak now, or click mic to finish!"
+                    : "Type your reply..."
+                }
                 className="flex-1 h-10 px-4 py-2.5 bg-neutral-900 border border-neutral-800 rounded-lg text-white placeholder-neutral-600 focus-visible:border-neutral-500 focus-visible:ring-1 focus-visible:ring-neutral-500 transition-all text-sm disabled:opacity-55"
               />
               <Button
@@ -675,52 +700,77 @@ export function AudioDashboard({
               </Button>
             </form>
 
-            <Button
-              type="button"
-              onClick={handleMicClick}
-              disabled={status === 'PROCESSING' || status === 'THINKING' || part2Phase === 'prep'}
-              size="icon"
-              className={`h-10 w-10 rounded-full border transition-all duration-300 ${
-                status === 'SPEAKING'
-                  ? 'bg-red-600 border-red-600 text-white hover:bg-red-500 hover:border-red-500 cursor-pointer animate-pulse'
-                  : isRecording
-                  ? 'bg-white border-white text-black animate-pulse-neutral'
-                  : 'bg-neutral-900 border-neutral-800 text-white hover:border-neutral-600 hover:bg-neutral-850 cursor-pointer'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={
-                part2Phase === 'prep'
-                  ? "Mic locked during prep"
-                  : status === 'SPEAKING'
-                  ? "Interrupt AI Tutor"
-                  : isRecording
-                  ? "Stop Recording"
-                  : "Start Voice Input"
-              }
-            >
-              <Mic className="w-4 h-4" />
-            </Button>
+            <div className="relative flex items-center justify-center shrink-0">
+              {isRecording && (
+                <>
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500/30 animate-ping opacity-75 pointer-events-none" />
+                  <span 
+                    className="absolute inline-flex rounded-full bg-emerald-500/20 pointer-events-none transition-all duration-100" 
+                    style={{ 
+                      width: '60px',
+                      height: '60px',
+                      transform: `scale(${1 + Math.min(0.6, rmsVolume * 5)})`,
+                    }}
+                  />
+                </>
+              )}
+              <Button
+                type="button"
+                onClick={handleMicClick}
+                disabled={status === 'PROCESSING' || status === 'THINKING' || part2Phase === 'prep'}
+                size="icon"
+                className={`h-10 w-10 rounded-full border transition-all duration-300 relative z-10 ${
+                  status === 'SPEAKING'
+                    ? 'bg-red-600 border-red-600 text-white hover:bg-red-500 hover:border-red-500 cursor-pointer animate-pulse'
+                    : isRecording
+                    ? 'bg-emerald-500 border-emerald-500 text-white cursor-pointer hover:bg-emerald-600 hover:border-emerald-600 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+                    : 'bg-neutral-900 border-neutral-800 text-white hover:border-neutral-600 hover:bg-neutral-850 cursor-pointer'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={
+                  part2Phase === 'prep'
+                    ? "Mic locked during prep"
+                    : status === 'SPEAKING'
+                    ? "Interrupt AI Tutor"
+                    : isRecording
+                    ? "Stop Recording"
+                    : "Start Voice Input"
+                }
+              >
+                <Mic className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Simple status hint bar */}
           <div className="text-center h-4">
             {status === 'LISTENING' && (
-              <span className="text-[10px] text-neutral-400 font-mono tracking-wide uppercase animate-pulse">
-                Listening... Click mic to complete
+              <span className="text-[10px] text-emerald-400 font-semibold font-mono tracking-wide uppercase animate-pulse flex items-center justify-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                Listening... Speak now or click mic to send
               </span>
             )}
             {status === 'PROCESSING' && (
-              <span className="text-[10px] text-neutral-500 font-mono tracking-wide uppercase">
+              <span className="text-[10px] text-neutral-500 font-mono tracking-wide uppercase flex items-center justify-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-neutral-500 animate-pulse" />
                 Processing voice transcription...
               </span>
             )}
             {status === 'THINKING' && (
-              <span className="text-[10px] text-neutral-500 font-mono tracking-wide uppercase">
+              <span className="text-[10px] text-neutral-500 font-mono tracking-wide uppercase flex items-center justify-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-neutral-500 animate-pulse" />
                 AI Tutor is response streaming...
               </span>
             )}
             {status === 'SPEAKING' && (
-              <span className="text-[10px] text-neutral-400 font-mono tracking-wide uppercase">
-                AI Tutor is speaking...
+              <span className="text-[10px] text-amber-500 font-mono tracking-wide uppercase flex items-center justify-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                AI Tutor is speaking... Click mic to interrupt
               </span>
             )}
           </div>
