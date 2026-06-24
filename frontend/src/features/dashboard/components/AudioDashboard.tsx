@@ -506,11 +506,11 @@ export function AudioDashboard({
 
                           return (
                             <span>
-                              {beforeText && <span className="opacity-45 text-neutral-400 transition-opacity duration-300">{beforeText}</span>}
-                              <span className="bg-white/[0.08] text-white px-1.5 py-0.5 rounded-lg border border-white/10 shadow-[0_0_10px_rgba(255,255,255,0.03)] font-medium transition-all duration-300 mx-0.5">
+                              {beforeText && <span className="opacity-40 text-neutral-400">{beforeText}</span>}
+                              <span className="bg-white/10 text-white px-1.5 py-0.5 rounded">
                                 {currentPlayingSentence}
                               </span>
-                              {afterText && <span className="opacity-45 text-neutral-400 transition-opacity duration-300">{afterText}</span>}
+                              {afterText && <span className="opacity-40 text-neutral-400">{afterText}</span>}
                             </span>
                           );
                         })()
@@ -595,12 +595,12 @@ export function AudioDashboard({
               {showSuggestions && (
                 <div className="flex flex-col gap-2.5 max-h-48 overflow-y-auto p-0 bg-transparent border-none">
                   {suggestions.map((suggestion, idx) => (
-                    <div key={idx} className="flex gap-2 items-stretch w-full">
+                    <div key={idx} className="relative w-full group">
                       <button
                         type="button"
                         onClick={() => sendTextMessage(suggestion)}
                         disabled={isLlmResponding}
-                        className="flex-1 text-left text-xs sm:text-sm py-2 px-3.5 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 rounded-xl text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal cursor-pointer"
+                        className="w-full text-left text-xs sm:text-sm py-2 pl-3.5 pr-11 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 rounded-xl text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal cursor-pointer"
                       >
                         {suggestion}
                       </button>
@@ -610,7 +610,7 @@ export function AudioDashboard({
                           e.stopPropagation();
                           speakText(suggestion);
                         }}
-                        className="flex items-center justify-center text-neutral-500 hover:text-white transition-colors duration-150 p-1 rounded-md bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40 cursor-pointer w-9 shrink-0"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white transition-colors duration-150 p-1 rounded-md bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40 cursor-pointer"
                         title="Speak this suggestion"
                       >
                         <Volume2 className="w-3.5 h-3.5" />
