@@ -13,7 +13,6 @@ interface AudioDashboardProps {
   transcript: string;
   chatHistory: ChatMessage[];
   currentPlayingSentence?: string;
-  highlightedWordIndex?: number;
   startRecording: (topic?: string, targetBand?: string, ieltsPart?: string) => void;
   stopRecording: () => void;
   startMicManual: () => void;
@@ -43,7 +42,6 @@ export function AudioDashboard({
   transcript,
   chatHistory,
   currentPlayingSentence,
-  highlightedWordIndex = -1,
   startRecording,
   stopRecording,
   startMicManual,

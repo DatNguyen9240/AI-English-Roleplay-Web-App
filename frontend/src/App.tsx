@@ -14,7 +14,6 @@ function App(): React.ReactElement {
     transcript,
     chatHistory,
     currentPlayingSentence,
-    highlightedWordIndex,
     startRecording,
     stopRecording,
     sendTextMessage,
@@ -48,7 +47,6 @@ function App(): React.ReactElement {
           transcript={transcript}
           chatHistory={chatHistory}
           currentPlayingSentence={currentPlayingSentence}
-          highlightedWordIndex={highlightedWordIndex}
           startRecording={startRecording}
           stopRecording={stopRecording}
           startMicManual={startMicManual}
