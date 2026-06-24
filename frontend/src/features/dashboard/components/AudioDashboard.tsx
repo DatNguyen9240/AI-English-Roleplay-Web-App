@@ -91,14 +91,14 @@ export function AudioDashboard({
   };
 
   return (
-    <div className="w-full max-w-none flex flex-col h-screen justify-between p-4 sm:p-6 font-sans text-neutral-200">
+    <div className="w-full max-w-none flex flex-col h-screen justify-between px-0 py-4 font-sans text-neutral-200">
       
       {/* 1. Header Area */}
-      <header className="flex justify-between items-center py-4 border-b border-neutral-800">
+      <header className="flex justify-between items-center py-4 px-4 sm:px-0 border-b border-neutral-800">
         <div className="flex items-center gap-3">
           <span className="font-bold tracking-tight text-white text-lg whitespace-nowrap">AI Tutor</span>
           {isSessionActive && (
-            <span className="text-[10px] bg-neutral-900 text-neutral-400 border border-neutral-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono whitespace-nowrap">
+            <span className="hidden sm:inline-block text-[10px] bg-neutral-900 text-neutral-400 border border-neutral-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono whitespace-nowrap">
               Active Session
             </span>
           )}
@@ -134,7 +134,7 @@ export function AudioDashboard({
 
       {/* Settings Panel */}
       {showSettings && (
-        <div className="bg-neutral-950 border border-neutral-900 rounded-lg p-4 my-2 space-y-4 animate-fade-in text-left">
+        <div className="bg-neutral-950 border-y sm:border border-neutral-900 sm:rounded-lg p-4 mx-4 sm:mx-0 my-2 space-y-4 animate-fade-in text-left">
           <div className="text-xs font-bold text-white uppercase tracking-wider font-mono">
             Speech & Audio Settings
           </div>
@@ -219,7 +219,7 @@ export function AudioDashboard({
       <div className="flex-1 flex flex-col min-h-0 py-6">
         {!isSessionActive ? (
           /* Start Screen (Minimalist Topic Selector) */
-          <div className="flex-1 flex flex-col justify-center items-center max-w-xl mx-auto w-full text-center animate-fade-in">
+          <div className="flex-1 flex flex-col justify-center items-center max-w-xl mx-auto w-full px-4 sm:px-0 text-center animate-fade-in">
             <h1 className="text-2xl font-bold tracking-tight text-white mb-2">
               <BlurText text="Practice Speaking English" delay={45} />
             </h1>
@@ -245,7 +245,7 @@ export function AudioDashboard({
           </div>
         ) : (
           /* Active Chat Workspace */
-          <div className="flex-1 flex flex-col min-h-0 bg-neutral-950 border border-neutral-900 rounded-xl overflow-hidden shadow-inner">
+          <div className="flex-1 flex flex-col min-h-0 bg-neutral-950 border-y sm:border border-neutral-900 sm:rounded-xl overflow-hidden shadow-inner">
             
             {/* Scrollable messages log */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -367,11 +367,11 @@ export function AudioDashboard({
 
       {/* 3. Bottom Input Controls Area */}
       {isSessionActive && (
-        <footer className="space-y-4">
+        <footer className="space-y-4 px-4 sm:px-0">
           
           {/* Floating Suggestion Answer Chips */}
           {suggestions.length > 0 && (
-            <div className="flex flex-col gap-2.5 animate-fade-in max-h-48 overflow-y-auto border border-neutral-850 bg-neutral-950 p-3.5 rounded-xl">
+            <div className="flex flex-col gap-2.5 animate-fade-in max-h-48 overflow-y-auto p-0 bg-transparent border-none">
               <div className="text-[9px] uppercase font-mono tracking-wider text-neutral-500 mb-0.5">
                 Suggested reply (Click to send):
               </div>

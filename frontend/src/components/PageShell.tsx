@@ -11,7 +11,7 @@ interface PageShellProps {
  */
 export function PageShell({ children, isSessionActive }: PageShellProps): React.ReactElement {
   return (
-    <div className={`min-h-screen w-full bg-neutral-950 text-neutral-100 flex flex-col items-center justify-center p-0 ${
+    <div className={`dark min-h-screen w-full bg-neutral-950 text-neutral-100 flex flex-col items-center justify-center p-0 ${
       isSessionActive ? 'h-[100dvh] overflow-hidden' : 'overflow-x-hidden'
     }`}>
       {children}
