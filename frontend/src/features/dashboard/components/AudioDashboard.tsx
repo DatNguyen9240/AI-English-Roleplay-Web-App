@@ -600,7 +600,7 @@ export function AudioDashboard({
                         type="button"
                         onClick={() => sendTextMessage(suggestion)}
                         disabled={isLlmResponding}
-                        className="w-full text-left text-xs sm:text-sm py-2 pl-3.5 pr-11 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 rounded-xl text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal cursor-pointer"
+                        className="w-full text-left text-xs sm:text-sm py-2.5 pl-3.5 pr-10 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 rounded-xl text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal cursor-pointer"
                       >
                         {suggestion}
                       </button>
@@ -610,7 +610,7 @@ export function AudioDashboard({
                           e.stopPropagation();
                           speakText(suggestion);
                         }}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white transition-colors duration-150 p-1 rounded-md bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40 cursor-pointer"
+                        className="absolute right-2.5 bottom-2.5 text-neutral-500 hover:text-white transition-colors duration-150 p-1 rounded-md bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40 cursor-pointer"
                         title="Speak this suggestion"
                       >
                         <Volume2 className="w-3.5 h-3.5" />
