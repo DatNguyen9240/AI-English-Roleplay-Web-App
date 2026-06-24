@@ -497,41 +497,20 @@ export function AudioDashboard({
                           : 'bg-neutral-900/40 border border-neutral-800 text-neutral-200 pr-10'
                       }`}
                     >
-                      {/* Real-time word-by-word lyrics highlight for AI messages */}
+                      {/* Highlight the sentence being read by AI */}
                       {!isUser && currentPlayingSentence && message.text.includes(currentPlayingSentence) ? (
                         (() => {
                           const startIndex = message.text.indexOf(currentPlayingSentence);
                           const beforeText = message.text.substring(0, startIndex);
                           const afterText = message.text.substring(startIndex + currentPlayingSentence.length);
-                          const words = currentPlayingSentence.split(' ');
 
                           return (
                             <span>
-                              {beforeText && <span className="text-neutral-200">{beforeText}</span>}
-                              
-                              <span className="inline-flex flex-wrap gap-x-1 border-b border-dashed border-neutral-800 pb-0.5 my-0.5">
-                                {words.map((word, wordIdx) => {
-                                  const isPast = wordIdx < highlightedWordIndex;
-                                  const isCurrent = wordIdx === highlightedWordIndex;
-                                  
-                                  return (
-                                    <span
-                                      key={wordIdx}
-                                      className={`transition-all duration-150 rounded px-0.5 ${
-                                        isCurrent
-                                          ? 'bg-white text-black font-semibold shadow-md scale-105 inline-block mx-0.5'
-                                          : isPast
-                                          ? 'text-neutral-200 font-medium'
-                                          : 'opacity-35 text-neutral-500 font-normal'
-                                      }`}
-                                    >
-                                      {word}
-                                    </span>
-                                  );
-                                })}
+                              {beforeText && <span className="opacity-45 text-neutral-400 transition-opacity duration-300">{beforeText}</span>}
+                              <span className="bg-white/[0.08] text-white px-1.5 py-0.5 rounded-lg border border-white/10 shadow-[0_0_10px_rgba(255,255,255,0.03)] font-medium transition-all duration-300 mx-0.5">
+                                {currentPlayingSentence}
                               </span>
-
-                              {afterText && <span className="opacity-35 text-neutral-500 transition-opacity duration-300">{afterText}</span>}
+                              {afterText && <span className="opacity-45 text-neutral-400 transition-opacity duration-300">{afterText}</span>}
                             </span>
                           );
                         })()
@@ -631,10 +610,10 @@ export function AudioDashboard({
                           e.stopPropagation();
                           speakText(suggestion);
                         }}
-                        className="flex items-center justify-center px-3 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 hover:border-neutral-700 rounded-xl text-neutral-400 hover:text-white transition-all duration-150 cursor-pointer w-11 shrink-0"
+                        className="flex items-center justify-center text-neutral-500 hover:text-white transition-colors duration-150 p-1 rounded-md bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40 cursor-pointer w-9 shrink-0"
                         title="Speak this suggestion"
                       >
-                        <Volume2 className="w-4 h-4" />
+                        <Volume2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ))}
