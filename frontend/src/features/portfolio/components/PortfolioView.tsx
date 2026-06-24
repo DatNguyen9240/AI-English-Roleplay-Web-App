@@ -37,7 +37,7 @@ export function PortfolioView({ activeTab, setActiveTab }: PortfolioViewProps): 
 
         {/* 1. Header Area */}
         <header className="flex justify-between items-center py-4 border-b border-neutral-800 shrink-0 gap-4 mb-8">
-          <div className="flex items-center gap-2">
+          <div className="flex-1 flex items-center gap-2 min-w-0">
             <Sparkles className="w-5 h-5 text-white animate-pulse" />
             <span className="font-bold tracking-tight text-white text-base sm:text-lg whitespace-nowrap">
               <DecryptedText text="Developer Hub" animateOn="load" speed={50} maxIterations={5} />
@@ -45,7 +45,7 @@ export function PortfolioView({ activeTab, setActiveTab }: PortfolioViewProps): 
           </div>
 
           {/* Navigation Switcher */}
-          <div className="flex bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg text-xs">
+          <div className="flex shrink-0 bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg text-xs">
             <button
               onClick={() => setActiveTab('practice')}
               className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${activeTab === 'practice'
@@ -65,6 +65,9 @@ export function PortfolioView({ activeTab, setActiveTab }: PortfolioViewProps): 
               About Me
             </button>
           </div>
+
+          {/* Right Spacer for balanced centering */}
+          <div className="flex-1 flex items-center justify-end" />
         </header>
 
         {/* 2. Main Profile Content */}

@@ -202,7 +202,7 @@ export function AudioDashboard({
       
       {/* 1. Header Area */}
       <header className="flex justify-between items-center py-4 border-b border-neutral-800 px-4 sm:px-0 shrink-0">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="flex-1 flex items-center gap-2 sm:gap-3 min-w-0">
           <span className="font-bold tracking-tight text-white text-base sm:text-lg whitespace-nowrap hidden sm:inline-block">AI Tutor</span>
           {isSessionActive && (
             <div className="flex items-center gap-1.5">
@@ -229,7 +229,7 @@ export function AudioDashboard({
         </div>
 
         {/* Navigation Switcher */}
-        <div className="flex bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg text-xs">
+        <div className="flex shrink-0 bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg text-xs">
           <button
             onClick={() => setActiveTab('practice')}
             className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${
@@ -252,14 +252,14 @@ export function AudioDashboard({
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex-1 flex items-center justify-end gap-2">
           <Button
             type="button"
             onClick={() => setShowSettings(!showSettings)}
             variant="ghost"
             size="icon"
             title="Speech Settings"
-            className={`h-8 w-8 text-neutral-400 hover:text-white transition-colors duration-250 ${
+            className={`h-8 w-8 text-neutral-400 hover:text-white transition-colors duration-255 ${
               showSettings ? 'bg-neutral-900 text-white' : ''
             }`}
           >
