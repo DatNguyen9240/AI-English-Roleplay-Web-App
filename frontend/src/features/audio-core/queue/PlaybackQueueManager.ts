@@ -81,6 +81,7 @@ export class PlaybackQueueManager {
   private activeUtterancesCount: number = 0;
   private currentPlayingChunk: PlaybackChunk | null = null;
   private isChangingSettings: boolean = false;
+  private activeUtterance: SpeechSynthesisUtterance | null = null;
 
   public onWordSpoken?: (
     wordText: string,
@@ -122,19 +123,42 @@ export class PlaybackQueueManager {
   private processQueue(): void {
     if (!this.isPlaying) return;
 
-    if (this.useBrowserTts) {
-      while (this.jitterBuffer.length > 0 && this.jitterBuffer[0].sequenceNumber === this.expectedSequenceNumber) {
-        const nextChunk = this.jitterBuffer.shift()!;
-        this.playChunk(nextChunk);
-        this.expectedSequenceNumber++;
-      }
-      return;
-    }
-
-    // Clear any pending jitter timeout since we are processing
+    // Clear any pending jitter timeout since we are processing/attempting to process
     if (this.jitterTimeout) {
       clearTimeout(this.jitterTimeout);
       this.jitterTimeout = null;
+    }
+
+    if (this.useBrowserTts) {
+      // For browser TTS, only play one chunk at a time to allow setting changes mid-speech.
+      if (this.currentPlayingChunk !== null) {
+        return;
+      }
+      if (this.jitterBuffer.length > 0 && this.jitterBuffer[0].sequenceNumber === this.expectedSequenceNumber) {
+        const nextChunk = this.jitterBuffer.shift()!;
+        this.expectedSequenceNumber++;
+        this.playChunk(nextChunk);
+      }
+
+      // If we have chunks in the buffer but there is a gap, wait for a brief period to allow the missing packet to arrive.
+      if (this.jitterBuffer.length > 0) {
+        const gapSize = this.jitterBuffer[0].sequenceNumber - this.expectedSequenceNumber;
+        if (gapSize > 0) {
+          logger.log(
+            `[PlayoutQueue] TTS Gap detected. Expected: ${this.expectedSequenceNumber}, Found: ${this.jitterBuffer[0].sequenceNumber}. Waiting for missing packets.`
+          );
+          this.jitterTimeout = setTimeout(() => {
+            logger.warn(
+              `[PlayoutQueue] TTS Jitter buffer timeout. Skipping sequence number ${this.expectedSequenceNumber} up to ${this.jitterBuffer[0].sequenceNumber}`
+            );
+            if (this.jitterBuffer.length > 0) {
+              this.expectedSequenceNumber = this.jitterBuffer[0].sequenceNumber;
+              this.processQueue();
+            }
+          }, audioConfig.jitterBufferDelayMs);
+        }
+      }
+      return;
     }
 
     // Process all chunks that match the expected sequence number
@@ -263,6 +287,7 @@ export class PlaybackQueueManager {
       const cleaned = sentenceText.replace(/[\*\s:]/g, '').toLowerCase();
       if (cleaned === 'passage') {
         logger.log('[PlaybackQueueManager] Skipping speaking structural label:', sentenceText);
+        this.currentPlayingChunk = null;
         this.checkQueueEmpty(chunk.requestId);
         if (this.isPlaying) {
           this.processQueue();
@@ -291,6 +316,8 @@ export class PlaybackQueueManager {
 
       // Set playback speed
       utterance.rate = this.ttsRate;
+
+      this.activeUtterance = utterance;
 
       // Track active timeouts for this chunk
       const chunkTimeouts: ReturnType<typeof setTimeout>[] = [];
@@ -383,7 +410,10 @@ export class PlaybackQueueManager {
 
       utterance.onend = () => {
         logger.log(`[BrowserTTS] Playback finished: "${sentenceText}"`);
-        this.activeUtterancesCount--;
+        if (this.activeUtterance === utterance) {
+          this.activeUtterance = null;
+        }
+        this.activeUtterancesCount = Math.max(0, this.activeUtterancesCount - 1);
         cleanupTimeouts();
         if (this.isChangingSettings) {
           return;
@@ -397,7 +427,10 @@ export class PlaybackQueueManager {
 
       utterance.onerror = (err) => {
         logger.error('[BrowserTTS] Speech synthesis error:', err);
-        this.activeUtterancesCount--;
+        if (this.activeUtterance === utterance) {
+          this.activeUtterance = null;
+        }
+        this.activeUtterancesCount = Math.max(0, this.activeUtterancesCount - 1);
         cleanupTimeouts();
         if (this.isChangingSettings) {
           return;
@@ -413,6 +446,7 @@ export class PlaybackQueueManager {
       window.speechSynthesis.speak(utterance);
     } catch (err) {
       logger.error('[BrowserTTS] Failed to execute speak:', err);
+      this.currentPlayingChunk = null;
       this.checkQueueEmpty(chunk.requestId);
       if (this.isPlaying) {
         this.processQueue();
@@ -468,6 +502,14 @@ export class PlaybackQueueManager {
     this.activeUtterancesCount = 0;
     this.currentPlayingChunk = null;
 
+    if (this.activeUtterance) {
+      this.activeUtterance.onstart = null;
+      this.activeUtterance.onboundary = null;
+      this.activeUtterance.onend = null;
+      this.activeUtterance.onerror = null;
+      this.activeUtterance = null;
+    }
+
     // Cancel any browser speech synthesis
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
@@ -506,15 +548,25 @@ export class PlaybackQueueManager {
   public applySettingsImmediately(): void {
     if (this.useBrowserTts && this.currentPlayingChunk && this.isPlaying) {
       logger.log('[PlaybackQueueManager] Speech settings changed. Re-speaking current chunk immediately.');
+      
+      if (this.activeUtterance) {
+        this.activeUtterance.onstart = null;
+        this.activeUtterance.onboundary = null;
+        this.activeUtterance.onend = null;
+        this.activeUtterance.onerror = null;
+        this.activeUtterance = null;
+      }
+      this.activeUtterancesCount = Math.max(0, this.activeUtterancesCount - 1);
+      
       this.isChangingSettings = true;
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
       setTimeout(() => {
+        this.isChangingSettings = false;
         if (this.currentPlayingChunk && this.isPlaying) {
           this.playChunkBrowserTts(this.currentPlayingChunk);
         }
-        this.isChangingSettings = false;
       }, 80);
     }
   }
