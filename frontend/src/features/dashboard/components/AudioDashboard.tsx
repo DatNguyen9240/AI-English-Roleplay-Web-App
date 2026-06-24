@@ -91,14 +91,14 @@ export function AudioDashboard({
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto flex flex-col h-[94vh] justify-between p-4 font-sans text-neutral-200">
+    <div className="w-full max-w-none flex flex-col h-screen justify-between p-4 sm:p-6 font-sans text-neutral-200">
       
       {/* 1. Header Area */}
       <header className="flex justify-between items-center py-4 border-b border-neutral-800">
-        <div className="flex items-center gap-2">
-          <span className="font-bold tracking-tight text-white text-lg">AI Tutor</span>
+        <div className="flex items-center gap-3">
+          <span className="font-bold tracking-tight text-white text-lg whitespace-nowrap">AI Tutor</span>
           {isSessionActive && (
-            <span className="text-[10px] bg-neutral-900 text-neutral-400 border border-neutral-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+            <span className="text-[10px] bg-neutral-900 text-neutral-400 border border-neutral-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono whitespace-nowrap">
               Active Session
             </span>
           )}
@@ -219,7 +219,7 @@ export function AudioDashboard({
       <div className="flex-1 flex flex-col min-h-0 py-6">
         {!isSessionActive ? (
           /* Start Screen (Minimalist Topic Selector) */
-          <div className="flex-1 flex flex-col justify-center items-center max-w-md mx-auto w-full text-center animate-fade-in">
+          <div className="flex-1 flex flex-col justify-center items-center max-w-xl mx-auto w-full text-center animate-fade-in">
             <h1 className="text-2xl font-bold tracking-tight text-white mb-2">
               <BlurText text="Practice Speaking English" delay={45} />
             </h1>
@@ -371,8 +371,8 @@ export function AudioDashboard({
           
           {/* Floating Suggestion Answer Chips */}
           {suggestions.length > 0 && (
-            <div className="flex flex-col gap-2 animate-fade-in max-h-32 overflow-y-auto border border-neutral-800/60 bg-neutral-950 p-2.5 rounded-lg">
-              <div className="text-[9px] uppercase font-mono tracking-wider text-neutral-500 mb-1">
+            <div className="flex flex-col gap-2.5 animate-fade-in max-h-48 overflow-y-auto border border-neutral-850 bg-neutral-950 p-3.5 rounded-xl">
+              <div className="text-[9px] uppercase font-mono tracking-wider text-neutral-500 mb-0.5">
                 Suggested reply (Click to send):
               </div>
               {suggestions.map((suggestion, idx) => (
@@ -381,7 +381,7 @@ export function AudioDashboard({
                   type="button"
                   onClick={() => sendTextMessage(suggestion)}
                   disabled={isLlmResponding}
-                  className="w-full text-left text-xs py-2 px-3 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 rounded-lg text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal"
+                  className="w-full text-left text-xs sm:text-sm py-2 px-3.5 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 rounded-xl text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal"
                 >
                   {suggestion}
                 </button>
