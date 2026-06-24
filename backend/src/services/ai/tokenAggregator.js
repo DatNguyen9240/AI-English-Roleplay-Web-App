@@ -31,12 +31,51 @@ class TokenAggregator {
     this._buffer += token;
     this._tokenCount++;
 
-    // Match standard sentence endings (. ? !) or newline, avoiding decimals (e.g. 3.14)
-    const hasBoundary = /[\n]/.test(token) || (/[.!?]/.test(token) && !/\d\.\d/.test(token));
-    const thresholdReached = this._tokenCount >= this.tokenThreshold;
+    this._processBuffer();
+  }
 
-    if (hasBoundary || thresholdReached) {
-      this._emit();
+  /**
+   * Scans the buffer to split sentences precisely at punctuation boundaries,
+   * preserving any trailing text from the next sentence for subsequent tokens.
+   * @private
+   */
+  _processBuffer() {
+    let i = 0;
+    while (i < this._buffer.length) {
+      const char = this._buffer[i];
+      let isBoundary = false;
+
+      if (char === '\n') {
+        isBoundary = true;
+      } else if (/[.!?]/.test(char)) {
+        // Avoid splitting decimals like 3.14
+        const prevChar = this._buffer[i - 1];
+        const nextChar = this._buffer[i + 1];
+        const isDecimal = prevChar && nextChar && /\d/.test(prevChar) && /\d/.test(nextChar);
+        if (!isDecimal) {
+          isBoundary = true;
+        }
+      }
+
+      if (isBoundary) {
+        const sentence = this._buffer.slice(0, i + 1).trim();
+        if (sentence) {
+          this.onSentenceReady(sentence);
+        }
+        this._buffer = this._buffer.slice(i + 1);
+        this._tokenCount = 0;
+        i = 0; // Reset scanner to scan the remaining buffer
+      } else {
+        i++;
+      }
+    }
+
+    // Fallback: if token threshold is reached, force emit the buffer to keep latency low
+    if (this._tokenCount >= this.tokenThreshold && this._buffer.trim()) {
+      const sentence = this._buffer.trim();
+      this.onSentenceReady(sentence);
+      this._buffer = '';
+      this._tokenCount = 0;
     }
   }
 
@@ -45,11 +84,6 @@ class TokenAggregator {
    * Must be called after the LLM stream completes.
    */
   flush() {
-    this._emit();
-  }
-
-  /** @private */
-  _emit() {
     const sentence = this._buffer.trim();
     if (sentence) {
       this.onSentenceReady(sentence);
