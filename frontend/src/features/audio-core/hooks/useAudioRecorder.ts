@@ -125,6 +125,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     }
     if (playoutQueueRef.current) {
       playoutQueueRef.current.ttsVoiceName = val;
+      playoutQueueRef.current.applySettingsImmediately();
     }
   }, []);
 
@@ -135,6 +136,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     }
     if (playoutQueueRef.current) {
       playoutQueueRef.current.ttsRate = val;
+      playoutQueueRef.current.applySettingsImmediately();
     }
   }, []);
 

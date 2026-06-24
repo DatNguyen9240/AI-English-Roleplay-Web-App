@@ -79,6 +79,8 @@ export class PlaybackQueueManager {
   public ttsRate: number = 1.0;
   private totalChunks: number | null = null;
   private activeUtterancesCount: number = 0;
+  private currentPlayingChunk: PlaybackChunk | null = null;
+  private isChangingSettings: boolean = false;
 
   public onWordSpoken?: (
     wordText: string,
@@ -167,6 +169,7 @@ export class PlaybackQueueManager {
    * Decodes PCM ArrayBuffer to AudioBuffer and schedules it in AudioContext.
    */
   private playChunk(chunk: PlaybackChunk): void {
+    this.currentPlayingChunk = chunk;
     if (this.useBrowserTts) {
       this.playChunkBrowserTts(chunk);
       return;
@@ -382,6 +385,10 @@ export class PlaybackQueueManager {
         logger.log(`[BrowserTTS] Playback finished: "${sentenceText}"`);
         this.activeUtterancesCount--;
         cleanupTimeouts();
+        if (this.isChangingSettings) {
+          return;
+        }
+        this.currentPlayingChunk = null;
         this.checkQueueEmpty(chunk.requestId);
         if (this.isPlaying) {
           this.processQueue();
@@ -392,6 +399,10 @@ export class PlaybackQueueManager {
         logger.error('[BrowserTTS] Speech synthesis error:', err);
         this.activeUtterancesCount--;
         cleanupTimeouts();
+        if (this.isChangingSettings) {
+          return;
+        }
+        this.currentPlayingChunk = null;
         this.checkQueueEmpty(chunk.requestId);
         if (this.isPlaying) {
           this.processQueue();
@@ -455,6 +466,7 @@ export class PlaybackQueueManager {
     this.isPlaying = false;
     this.totalChunks = null;
     this.activeUtterancesCount = 0;
+    this.currentPlayingChunk = null;
 
     // Cancel any browser speech synthesis
     if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -486,5 +498,24 @@ export class PlaybackQueueManager {
     this.jitterBuffer = [];
     this.nextPlayTime = 0;
     this.expectedSequenceNumber = 0;
+  }
+
+  /**
+   * Applies the current speech settings immediately during active playback by restarting the utterance.
+   */
+  public applySettingsImmediately(): void {
+    if (this.useBrowserTts && this.currentPlayingChunk && this.isPlaying) {
+      logger.log('[PlaybackQueueManager] Speech settings changed. Re-speaking current chunk immediately.');
+      this.isChangingSettings = true;
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      setTimeout(() => {
+        if (this.currentPlayingChunk && this.isPlaying) {
+          this.playChunkBrowserTts(this.currentPlayingChunk);
+        }
+        this.isChangingSettings = false;
+      }, 80);
+    }
   }
 }

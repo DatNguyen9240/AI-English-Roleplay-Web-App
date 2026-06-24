@@ -47,6 +47,11 @@ function App(): React.ReactElement {
         sendTextMessage={sendTextMessage}
         resetSession={resetSession}
         suggestions={suggestions}
+        ttsVoiceName={ttsVoiceName}
+        changeTtsVoiceName={changeTtsVoiceName}
+        ttsRate={ttsRate}
+        changeTtsRate={changeTtsRate}
+        availableVoices={availableVoices}
       />
     </PageShell>
   );

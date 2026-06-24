@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RecordingStatus } from 'shared-contracts';
 import { ChatMessage } from '@/features/audio-core/hooks/useAudioRecorder';
-import { Mic, Send, RotateCcw, AlertCircle } from 'lucide-react';
+import { Mic, Send, RotateCcw, AlertCircle, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BlurText } from '@/components/react-bits/BlurText';
@@ -18,6 +18,11 @@ interface AudioDashboardProps {
   sendTextMessage: (text: string) => void;
   resetSession: () => void;
   suggestions: string[];
+  ttsVoiceName: string | null;
+  changeTtsVoiceName: (val: string | null) => void;
+  ttsRate: number;
+  changeTtsRate: (val: number) => void;
+  availableVoices: SpeechSynthesisVoice[];
 }
 
 export function AudioDashboard({
@@ -32,9 +37,15 @@ export function AudioDashboard({
   sendTextMessage,
   resetSession,
   suggestions,
+  ttsVoiceName,
+  changeTtsVoiceName,
+  ttsRate,
+  changeTtsRate,
+  availableVoices,
 }: AudioDashboardProps): React.ReactElement {
   const [topicInput, setTopicInput] = useState('');
   const [textInput, setTextInput] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   
   const isSessionActive = chatHistory.length > 0 || (status !== 'IDLE' && status !== 'ERROR');
@@ -80,19 +91,83 @@ export function AudioDashboard({
             </span>
           )}
         </div>
-        {isSessionActive && (
+        <div className="flex items-center gap-2">
           <Button
-            onClick={resetSession}
-            variant="outline"
-            size="sm"
-            title="Reset practice topic"
-            className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition-colors duration-200"
+            type="button"
+            onClick={() => setShowSettings(!showSettings)}
+            variant="ghost"
+            size="icon"
+            title="Speech Settings"
+            className={`h-8 w-8 text-neutral-400 hover:text-white transition-colors duration-250 ${
+              showSettings ? 'bg-neutral-900 text-white' : ''
+            }`}
           >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>New Topic</span>
+            <Settings className="w-4 h-4" />
           </Button>
-        )}
+          {isSessionActive && (
+            <Button
+              onClick={resetSession}
+              variant="outline"
+              size="sm"
+              title="Reset practice topic"
+              className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition-colors duration-200"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>New Topic</span>
+            </Button>
+          )}
+        </div>
       </header>
+
+      {/* Settings Panel */}
+      {showSettings && (
+        <div className="bg-neutral-950 border border-neutral-900 rounded-lg p-4 my-2 space-y-4 animate-fade-in text-left">
+          <div className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+            Speech & Audio Settings
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Voice Dropdown */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider font-bold">Accent (Giọng đọc)</label>
+              {availableVoices.length === 0 ? (
+                <div className="text-xs text-neutral-500 italic">
+                  Loading system voices...
+                </div>
+              ) : (
+                <select
+                  value={ttsVoiceName || ''}
+                  onChange={(e) => changeTtsVoiceName(e.target.value || null)}
+                  className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-white text-xs focus:outline-none focus:border-neutral-500 cursor-pointer"
+                >
+                  <option value="">System Default</option>
+                  {availableVoices.map((voice) => (
+                    <option key={voice.name} value={voice.name}>
+                      {voice.name.replace(/Microsoft|Google|Natural/g, '').trim()} ({voice.lang})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Speed Dropdown */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider font-bold">Speed (Tốc độ đọc)</label>
+              <select
+                value={ttsRate}
+                onChange={(e) => changeTtsRate(parseFloat(e.target.value))}
+                className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-white text-xs focus:outline-none focus:border-neutral-500 cursor-pointer"
+              >
+                <option value="0.8">0.8x (Slow)</option>
+                <option value="1.0">1.0x (Normal)</option>
+                <option value="1.2">1.2x</option>
+                <option value="1.5">1.5x (Fast)</option>
+                <option value="1.8">1.8x</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 2. Main Practice Workspace */}
       <div className="flex-1 flex flex-col min-h-0 py-6">
