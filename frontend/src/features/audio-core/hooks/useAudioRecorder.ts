@@ -1,14 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { downsampleBuffer, convertFloat32ToInt16 } from '../utils/audioDownsampler';
 import { audioConfig } from '../config/audioConfig';
-import { EnergyVadProcessor } from '../services/EnergyVadProcessor';
-import { SocketIOStreamer } from '../services/SocketIOStreamer';
 import { PlaybackQueueManager } from '../queue/PlaybackQueueManager';
 import { logger } from '@/utils/logger';
-import { SOCKET_EVENTS, RecordingStatus } from 'shared-contracts';
+import { RecordingStatus } from 'shared-contracts';
 
-const SAMPLES_PER_CHUNK = (audioConfig.targetSampleRate * audioConfig.chunkDurationMs) / 1000;
-const WORKLET_MODULE_URL = '/worklets/audio-capture-processor.worklet.js';
+// Import sub-hooks
+import { useSpeechRecognition } from './useSpeechRecognition';
+import { useAudioCapture } from './useAudioCapture';
+import { useSocketStream } from './useSocketStream';
 
 export interface ChatMessage {
   id: string;
@@ -44,59 +43,34 @@ export interface UseAudioRecorderReturn {
 }
 
 /**
- * Custom React hook coordinating the full turn-taking audio pipeline.
- *
- * State machine (README Section 6):
- *   IDLE → LISTENING (startRecording)
- *   LISTENING → PROCESSING (stopRecording / VAD silence)
- *   PROCESSING → THINKING (stt-completed received)
- *   THINKING → IDLE (llm-stream-done received)
- *   any → ERROR (socket/mic error)
+ * Main turn-taking coordination hook.
+ * Composes useSpeechRecognition, useAudioCapture, and useSocketStream.
  */
 export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [isRecording, setIsRecording] = useState(false);
   const [status, setStatus] = useState<RecordingStatus>('IDLE');
-  const [rmsVolume, setRmsVolume] = useState(0);
-  const [transcript, setTranscript] = useState('');
   const [llmText, setLlmText] = useState('');
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [currentPlayingSentence, setCurrentPlayingSentence] = useState('');
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
+  // Settings & Preferences stored in LocalStorage
   const [useBrowserTts, setUseBrowserTts] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('use_browser_tts');
-      return stored !== 'false'; // Defaults to true
+      return stored !== 'false';
     }
     return true;
   });
-
-  const toggleBrowserTts = useCallback((val: boolean) => {
-    setUseBrowserTts(val);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('use_browser_tts', String(val));
-    }
-    if (playoutQueueRef.current) {
-      playoutQueueRef.current.useBrowserTts = val;
-    }
-  }, []);
 
   const [useBrowserStt, setUseBrowserStt] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('use_browser_stt');
-      return stored !== 'false'; // Defaults to true
+      return stored !== 'false';
     }
     return true;
   });
-
-  const toggleBrowserStt = useCallback((val: boolean) => {
-    setUseBrowserStt(val);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('use_browser_stt', String(val));
-    }
-  }, []);
-
 
   const [ttsVoiceName, setTtsVoiceName] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
@@ -115,24 +89,32 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
 
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    const updateVoices = () => {
-      const voices = window.speechSynthesis.getVoices();
-      // Filter English voices
-      const enVoices = voices.filter(v => v.lang.startsWith('en'));
-      setAvailableVoices(enVoices);
-    };
+  // Refs for tracking active context/timeouts
+  const statusRef = useRef<RecordingStatus>('IDLE');
+  statusRef.current = status;
 
-    updateVoices();
-    if ('onvoiceschanged' in window.speechSynthesis) {
-      window.speechSynthesis.onvoiceschanged = updateVoices;
+  const topicRef = useRef<string | undefined>(undefined);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const playoutQueueRef = useRef<PlaybackQueueManager | null>(null);
+  const sttTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const llmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Toggle callbacks
+  const toggleBrowserTts = useCallback((val: boolean) => {
+    setUseBrowserTts(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('use_browser_tts', String(val));
     }
-    return () => {
-      if (window.speechSynthesis && 'onvoiceschanged' in window.speechSynthesis) {
-        window.speechSynthesis.onvoiceschanged = null;
-      }
-    };
+    if (playoutQueueRef.current) {
+      playoutQueueRef.current.useBrowserTts = val;
+    }
+  }, []);
+
+  const toggleBrowserStt = useCallback((val: boolean) => {
+    setUseBrowserStt(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('use_browser_stt', String(val));
+    }
   }, []);
 
   const changeTtsVoiceName = useCallback((val: string | null) => {
@@ -156,17 +138,209 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     }
   }, []);
 
-  const statusRef = useRef<RecordingStatus>('IDLE');
+  // Fetch Speech Synthesis Voices
   useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    const updateVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const enVoices = voices.filter(v => v.lang.startsWith('en'));
+      setAvailableVoices(enVoices);
+    };
 
+    updateVoices();
+    if ('onvoiceschanged' in window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+    return () => {
+      if (window.speechSynthesis && 'onvoiceschanged' in window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+
+  // State transitions
   const updateStatus = useCallback((newStatus: RecordingStatus) => {
     setStatus(newStatus);
     statusRef.current = newStatus;
   }, []);
 
-  const triggerInterruption = useCallback((): void => {
+  // ── 1. useSpeechRecognition hook ──
+  const {
+    transcript,
+    startSpeechRecognition,
+    stopSpeechRecognition,
+    resetSpeechTranscript,
+  } = useSpeechRecognition();
+
+  // ── 2. useSocketStream hook ──
+  const handleConnect = useCallback(() => {
+    logger.log('[Socket] Connected to backend');
+    if (topicRef.current) {
+      logger.log('[useAudioRecorder] Sending custom topic to backend:', topicRef.current);
+      sendTopic(topicRef.current);
+    }
+  }, []);
+
+  const handleConnectError = useCallback((err: Error) => {
+    logger.error('[Socket] Connection error:', err.message);
+    updateStatus('ERROR');
+    stopAudio();
+  }, []);
+
+  const handleDisconnect = useCallback((reason: string) => {
+    if (reason !== 'io client disconnect') {
+      logger.warn('[Socket] Unexpected disconnect:', reason);
+    }
+  }, []);
+
+  const handleSttCompleted = useCallback(({ transcript: text, latencyMs }: { transcript: string; latencyMs: number }) => {
+    clearTimeout(sttTimeoutRef.current ?? undefined);
+    logger.log(`[STT] Completed in ${latencyMs}ms: "${text}"`);
+    setLlmText('');
+    setCurrentPlayingSentence('');
+    setHighlightedWordIndex(-1);
+    updateStatus('THINKING');
+
+    setChatHistory((prev) => [
+      ...prev,
+      {
+        id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+        sender: 'user',
+        text: text,
+        timestamp: Date.now(),
+      },
+    ]);
+
+    llmTimeoutRef.current = setTimeout(() => {
+      logger.warn('[LLM] Timeout — no llm-stream-done received');
+      updateStatus('ERROR');
+      disconnectSocket();
+    }, audioConfig.llmTimeoutMs);
+  }, []);
+
+  const handleLlmStreamChunk = useCallback(({ token }: { token: string }) => {
+    setLlmText((prev) => {
+      const nextText = prev + token;
+
+      setChatHistory((history) => {
+        const lastMsg = history[history.length - 1];
+        if (lastMsg && lastMsg.sender === 'ai' && lastMsg.id === 'ai-current') {
+          return [
+            ...history.slice(0, -1),
+            {
+              ...lastMsg,
+              text: nextText,
+            },
+          ];
+        } else {
+          return [
+            ...history,
+            {
+              id: 'ai-current',
+              sender: 'ai',
+              text: token,
+              timestamp: Date.now(),
+            },
+          ];
+        }
+      });
+
+      return nextText;
+    });
+  }, []);
+
+  const handleLlmStreamDone = useCallback(({ latencyMs, totalChunks, suggestions: suggestedAnswers }: { latencyMs: number; totalChunks?: number; suggestions?: string[] }) => {
+    clearTimeout(llmTimeoutRef.current ?? undefined);
+    logger.log(`[LLM] Stream done in ${latencyMs}ms. Total chunks: ${totalChunks}`);
+
+    if (playoutQueueRef.current && typeof totalChunks === 'number') {
+      playoutQueueRef.current.setTotalChunks(totalChunks);
+    }
+
+    if (Array.isArray(suggestedAnswers)) {
+      setSuggestions(suggestedAnswers);
+    } else {
+      setSuggestions([]);
+    }
+  }, []);
+
+  const handleTtsAudioChunk = useCallback((data: any) => {
+    logger.log(`[TTS] Received chunk sequence: ${data.sequenceNumber}`);
+    if (playoutQueueRef.current) {
+      playoutQueueRef.current.enqueue({
+        requestId: data.requestId,
+        sequenceNumber: data.sequenceNumber,
+        audio: data.audio,
+        sampleRate: data.sampleRate,
+        words: data.words,
+      });
+    }
+  }, []);
+
+  const handleSessionError = useCallback(({ message }: { message: string }) => {
+    clearTimeout(sttTimeoutRef.current ?? undefined);
+    clearTimeout(llmTimeoutRef.current ?? undefined);
+    logger.error('[Socket] Session error:', message);
+    updateStatus('ERROR');
+    disconnectSocket();
+    playoutQueueRef.current?.stop();
+  }, []);
+
+  const {
+    connectSocket,
+    disconnectSocket,
+    sendAudioChunk,
+    sendSpeechEndSignal,
+    sendUserInterruptSignal,
+    sendTextInput,
+    sendTopic,
+  } = useSocketStream({
+    socketUrl,
+    onConnect: handleConnect,
+    onConnectError: handleConnectError,
+    onDisconnect: handleDisconnect,
+    onSttCompleted: handleSttCompleted,
+    onLlmStreamChunk: handleLlmStreamChunk,
+    onLlmStreamDone: handleLlmStreamDone,
+    onTtsAudioChunk: handleTtsAudioChunk,
+    onSessionError: handleSessionError,
+  });
+
+  // ── 3. useAudioCapture hook ──
+  const handlePcmChunk = useCallback((pcm16: ArrayBuffer, sequence: number) => {
+    sendAudioChunk(sequence, pcm16);
+  }, [sendAudioChunk]);
+
+  const handleSilenceDetected = useCallback(() => {
+    logger.log('[VAD] Silence detected — triggering speech-end');
+    stopRecording();
+  }, []);
+
+  const handleInterruptionDetected = useCallback((volume: number) => {
+    logger.log(`[VAD] Interruption detected. Volume: ${volume.toFixed(3)}`);
+    triggerInterruption();
+  }, []);
+
+  const {
+    rmsVolume,
+    setRmsVolume,
+    startCapture,
+    stopCapture,
+    resetCaptureBuffers,
+  } = useAudioCapture({
+    status,
+    onPcmChunk: handlePcmChunk,
+    onSilenceDetected: handleSilenceDetected,
+    onInterruptionDetected: handleInterruptionDetected,
+  });
+
+  // Action methods
+  const stopAudio = useCallback(() => {
+    setIsRecording(false);
+    stopCapture();
+  }, [stopCapture]);
+
+  const triggerInterruption = useCallback(() => {
     if (statusRef.current !== 'SPEAKING') {
       logger.warn('[useAudioRecorder] triggerInterruption called but state is not SPEAKING:', statusRef.current);
       return;
@@ -178,113 +352,40 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
 
-    streamerRef.current?.sendUserInterrupt();
+    sendUserInterruptSignal();
 
-    // Mark active AI message as interrupted in history
     setChatHistory((history) =>
       history.map((msg) =>
         msg.id === 'ai-current'
           ? {
               ...msg,
-              id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              id: `ai-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
               text: msg.text.trim() + '... [interrupted]',
             }
           : msg
       )
     );
 
-    audioBufferQueueRef.current = [];
-    sequenceNumberRef.current = 0;
-
+    resetCaptureBuffers();
     setIsRecording(true);
-  }, [updateStatus]);
-
-  const triggerInterruptionRef = useRef<() => void>(() => undefined);
-  useEffect(() => {
-    triggerInterruptionRef.current = triggerInterruption;
-  }, [triggerInterruption]);
-
-  // Services — lazily initialized once per mount
-  const streamerRef = useRef<SocketIOStreamer | null>(null);
-  const vadProcessorRef = useRef<EnergyVadProcessor | null>(null);
-  if (!streamerRef.current) streamerRef.current = new SocketIOStreamer();
-  if (!vadProcessorRef.current) vadProcessorRef.current = new EnergyVadProcessor(audioConfig);
-
-  // Web Audio API nodes
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
-  const audioInputRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const playoutQueueRef = useRef<PlaybackQueueManager | null>(null);
-
-  // Audio accumulation
-  const audioBufferQueueRef = useRef<number[]>([]);
-  const sequenceNumberRef = useRef(0);
-  const lastVolumeUpdateRef = useRef(0);
-  const sttTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const llmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Forward refs to avoid stale closure issues
-  const stopAudioRef = useRef<() => void>(() => undefined);
-  const stopRecordingRef = useRef<() => void>(() => undefined);
-
-  const recognitionRef = useRef<any>(null);
-  const transcriptRef = useRef('');
-
-  /** Stops mic/worklet/AudioContext — socket stays alive until llm-stream-done */
-  const stopAudio = useCallback((): void => {
-    setIsRecording(false);
-    setRmsVolume(0);
-    vadProcessorRef.current?.reset();
-
-    if (workletNodeRef.current) {
-      workletNodeRef.current.port.onmessage = null;
-      workletNodeRef.current.disconnect();
-      workletNodeRef.current = null;
-    }
-    if (audioInputRef.current) {
-      audioInputRef.current.disconnect();
-      audioInputRef.current = null;
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
-      mediaStreamRef.current = null;
-    }
-    // Keep audioContextRef.current alive for playout queue.
-    
-    audioBufferQueueRef.current = [];
-    sequenceNumberRef.current = 0;
-    lastVolumeUpdateRef.current = 0;
-  }, []);
+  }, [updateStatus, sendUserInterruptSignal, resetCaptureBuffers]);
 
   const sendTextMessage = useCallback((text: string): void => {
     if (!text.trim()) return;
     logger.log('[useAudioRecorder] Sending user text message:', text);
     
-    // Clear audio buffers to ignore background noise during typing
-    audioBufferQueueRef.current = [];
-    sequenceNumberRef.current = 0;
-    vadProcessorRef.current?.reset();
-
-    // Send the text message to the server
-    streamerRef.current?.sendTextInput(text);
-
-    // Update local state to PROCESSING
+    resetCaptureBuffers();
+    sendTextInput(text);
     updateStatus('PROCESSING');
-  }, [updateStatus]);
+  }, [resetCaptureBuffers, sendTextInput, updateStatus]);
 
-  /** Stops audio, signals server, enters PROCESSING. Socket kept alive. */
   const stopRecording = useCallback((): void => {
     setIsRecording(false);
     setRmsVolume(0);
 
     if (useBrowserStt) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-        recognitionRef.current = null;
-      }
-      const textVal = transcriptRef.current.trim();
-      if (textVal) {
+      const textVal = stopSpeechRecognition();
+      if (textVal.trim()) {
         sendTextMessage(textVal);
       } else {
         updateStatus('IDLE');
@@ -292,152 +393,26 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       return;
     }
 
-    vadProcessorRef.current?.reset();
     updateStatus('PROCESSING');
-    streamerRef.current?.sendSpeechEnd();
-
+    sendSpeechEndSignal();
     stopAudio();
 
     sttTimeoutRef.current = setTimeout(() => {
       logger.warn('[STT] Timeout — no stt-completed received');
       updateStatus('ERROR');
-      streamerRef.current?.disconnect();
+      disconnectSocket();
     }, audioConfig.sttTimeoutMs);
-  }, [updateStatus, stopAudio, useBrowserStt, sendTextMessage]);
-
-  stopAudioRef.current = stopAudio;
-  stopRecordingRef.current = stopRecording;
-
-  /** Force-disconnects everything immediately — used only on unmount */
-  const forceCleanup = useCallback((): void => {
-    clearTimeout(sttTimeoutRef.current ?? undefined);
-    clearTimeout(llmTimeoutRef.current ?? undefined);
-    stopAudioRef.current();
-    streamerRef.current?.sendSpeechEnd();
-    streamerRef.current?.disconnect();
-    
-    // Close AudioContext and stop playout queue on unmount
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    playoutQueueRef.current?.stop();
-    playoutQueueRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    return () => forceCleanup();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const startMicCapture = useCallback(async (audioContext: AudioContext) => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-    });
-    mediaStreamRef.current = stream;
-
-    await audioContext.audioWorklet.addModule(WORKLET_MODULE_URL);
-    const workletNode = new AudioWorkletNode(audioContext, 'audio-capture-processor');
-    workletNodeRef.current = workletNode;
-
-    audioInputRef.current = audioContext.createMediaStreamSource(stream);
-    audioInputRef.current.connect(workletNode);
-    workletNode.connect(audioContext.destination);
-
-    workletNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
-      const inputData = event.data;
-      const currentStatus = statusRef.current;
-
-      // 1. Interruption Check (during SPEAKING state)
-      if (currentStatus === 'SPEAKING') {
-        const volume = vadProcessorRef.current?.updateVolume(inputData) ?? 0;
-        const interruptionThreshold = audioConfig.interruptionVolumeThreshold;
-        if (volume > interruptionThreshold) {
-          logger.log(`[useAudioRecorder] Interruption detected. Volume: ${volume.toFixed(3)} (Threshold: ${interruptionThreshold.toFixed(3)})`);
-          triggerInterruptionRef.current();
-          return;
-        }
-      }
-
-      // 2. Silence detection & Audio streaming (only in LISTENING state)
-      if (currentStatus === 'LISTENING') {
-        vadProcessorRef.current?.process(inputData, () => {
-          logger.log('[VAD] Silence detected — triggering speech-end');
-          stopRecordingRef.current();
-        });
-
-        const downsampled = downsampleBuffer(
-          inputData,
-          audioContext.sampleRate,
-          audioConfig.targetSampleRate
-        );
-
-        audioBufferQueueRef.current.push(...downsampled);
-
-        while (audioBufferQueueRef.current.length >= SAMPLES_PER_CHUNK) {
-          const chunk = audioBufferQueueRef.current.splice(0, SAMPLES_PER_CHUNK);
-          const pcm16 = convertFloat32ToInt16(new Float32Array(chunk));
-          streamerRef.current?.sendChunk(sequenceNumberRef.current++, pcm16);
-        }
-      }
-
-      // 3. Update volume visualizer
-      const now = performance.now();
-      if (now - lastVolumeUpdateRef.current > 33) {
-        setRmsVolume(vadProcessorRef.current?.getVolume() ?? 0);
-        lastVolumeUpdateRef.current = now;
-      }
-    };
-  }, []);
+  }, [useBrowserStt, stopSpeechRecognition, sendTextMessage, updateStatus, sendSpeechEndSignal, stopAudio, disconnectSocket]);
 
   const startMicManual = useCallback(async () => {
-    setTranscript('');
-    transcriptRef.current = '';
+    resetSpeechTranscript();
     setIsRecording(true);
     updateStatus('LISTENING');
 
     if (useBrowserStt) {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        logger.error('Browser does not support SpeechRecognition');
+      startSpeechRecognition(() => {
         updateStatus('ERROR');
-        return;
-      }
-
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onresult = (event: any) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
-        for (let i = 0; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          } else {
-            interimTranscript += event.results[i][0].transcript;
-          }
-        }
-        const text = finalTranscript + interimTranscript;
-        setTranscript(text);
-        transcriptRef.current = text;
-      };
-
-      recognition.onerror = (err: any) => {
-        logger.error('[BrowserSTT] Speech recognition error:', err);
-      };
-
-      recognition.onend = () => {
-        logger.log('[BrowserSTT] Speech recognition ended');
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
+      });
       return;
     }
 
@@ -450,151 +425,30 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         await audioContext.resume();
       }
 
-      await startMicCapture(audioContext);
+      await startCapture(audioContext);
     } catch (err) {
       logger.error('[Manual Mic] Failed to start:', err);
       updateStatus('ERROR');
     }
-  }, [startMicCapture, updateStatus, useBrowserStt]);
+  }, [useBrowserStt, startSpeechRecognition, resetSpeechTranscript, startCapture, updateStatus]);
 
   const startRecording = useCallback(async (topic?: string): Promise<void> => {
     setIsRecording(false);
     updateStatus('THINKING');
-    setTranscript('');
+    resetSpeechTranscript();
     setLlmText('');
     setChatHistory([]);
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
     setSuggestions([]);
     
-    // Reset playout queue for the new turn
     playoutQueueRef.current?.stop();
+    resetCaptureBuffers();
 
-    sequenceNumberRef.current = 0;
-    audioBufferQueueRef.current = [];
-    vadProcessorRef.current?.reset();
+    topicRef.current = topic;
 
     try {
-      streamerRef.current!.connect(socketUrl, {
-        onConnect: () => {
-          logger.log('[Socket] Connected to backend');
-          if (topic) {
-            logger.log('[useAudioRecorder] Sending custom topic to backend:', topic);
-            streamerRef.current?.sendTopic(topic);
-          }
-        },
-        onConnectError: (err: Error) => {
-          logger.error('[Socket] Connection error:', err.message);
-          updateStatus('ERROR');
-          stopAudioRef.current();
-        },
-        onDisconnect: (reason: string) => {
-          if (reason !== 'io client disconnect') {
-            logger.warn('[Socket] Unexpected disconnect:', reason);
-          }
-        },
-      });
-
-      // ── STT result → transition to THINKING ─────────────────────────────
-      streamerRef.current!.on(SOCKET_EVENTS.STT_COMPLETED, ({ transcript: text, latencyMs }) => {
-          clearTimeout(sttTimeoutRef.current ?? undefined);
-          logger.log(`[STT] Completed in ${latencyMs}ms: "${text}"`);
-          setTranscript(text);
-          setLlmText('');
-          setCurrentPlayingSentence('');
-          setHighlightedWordIndex(-1);
-          updateStatus('THINKING');
-
-          // Add to chat history
-          setChatHistory((prev) => [
-            ...prev,
-            {
-              id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-              sender: 'user',
-              text: text,
-              timestamp: Date.now(),
-            },
-          ]);
-
-        // Start LLM timeout watchdog
-        llmTimeoutRef.current = setTimeout(() => {
-          logger.warn('[LLM] Timeout — no llm-stream-done received');
-          updateStatus('ERROR');
-          streamerRef.current?.disconnect();
-        }, audioConfig.llmTimeoutMs);
-      });
-
-      // ── LLM tokens → accumulate into llmText and update chatHistory ──────
-      streamerRef.current!.on(SOCKET_EVENTS.LLM_STREAM_CHUNK, ({ token }) => {
-        setLlmText((prev) => {
-          const nextText = prev + token;
-
-          setChatHistory((history) => {
-            const lastMsg = history[history.length - 1];
-            if (lastMsg && lastMsg.sender === 'ai' && lastMsg.id === 'ai-current') {
-              return [
-                ...history.slice(0, -1),
-                {
-                  ...lastMsg,
-                  text: nextText,
-                },
-              ];
-            } else {
-              return [
-                ...history,
-                {
-                  id: 'ai-current',
-                  sender: 'ai',
-                  text: token,
-                  timestamp: Date.now(),
-                },
-              ];
-            }
-          });
-
-          return nextText;
-        });
-      });
-
-      // ── LLM stream done ──────────────────────────────────────────────────
-      streamerRef.current!.on(SOCKET_EVENTS.LLM_STREAM_DONE, ({ latencyMs, totalChunks, suggestions: suggestedAnswers }) => {
-        clearTimeout(llmTimeoutRef.current ?? undefined);
-        logger.log(`[LLM] Stream done in ${latencyMs}ms. Total chunks generated: ${totalChunks}`);
-
-        if (playoutQueueRef.current && typeof totalChunks === 'number') {
-          playoutQueueRef.current.setTotalChunks(totalChunks);
-        }
-
-        if (Array.isArray(suggestedAnswers)) {
-          setSuggestions(suggestedAnswers);
-        } else {
-          setSuggestions([]);
-        }
-      });
-
-      // ── TTS audio chunk → playout ─────────────────────────────────────────
-      streamerRef.current!.on(SOCKET_EVENTS.TTS_AUDIO_CHUNK, (data) => {
-        logger.log(`[TTS] Received chunk sequence: ${data.sequenceNumber}`);
-        if (playoutQueueRef.current) {
-          playoutQueueRef.current.enqueue({
-            requestId: data.requestId,
-            sequenceNumber: data.sequenceNumber,
-            audio: data.audio,
-            sampleRate: data.sampleRate,
-            words: data.words,
-          });
-        }
-      });
-
-      // ── Error handler ────────────────────────────────────────────────────
-      streamerRef.current!.on(SOCKET_EVENTS.SESSION_ERROR, ({ message }) => {
-        clearTimeout(sttTimeoutRef.current ?? undefined);
-        clearTimeout(llmTimeoutRef.current ?? undefined);
-        logger.error('[Socket] Session error:', message);
-        updateStatus('ERROR');
-        streamerRef.current?.disconnect();
-        playoutQueueRef.current?.stop();
-      });
+      connectSocket();
 
       if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
         audioContextRef.current = new window.AudioContext();
@@ -604,7 +458,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         await audioContext.resume();
       }
 
-      // Initialize Playout Queue Manager for the current session
       const queue = new PlaybackQueueManager(audioContext);
       queue.useBrowserTts = useBrowserTts;
       queue.ttsVoiceName = ttsVoiceName;
@@ -622,39 +475,65 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         setCurrentPlayingSentence('');
         setHighlightedWordIndex(-1);
         
-        // Finalize the active AI message ID so it doesn't get appended next turn
         setChatHistory((history) =>
           history.map((msg) =>
             msg.id === 'ai-current'
-              ? { ...msg, id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` }
+              ? { ...msg, id: `ai-${Date.now()}-${Math.random().toString(36).substring(2, 11)}` }
               : msg
           )
         );
 
-        stopAudioRef.current();
+        stopAudio();
         updateStatus('IDLE');
       };
       playoutQueueRef.current = queue;
     } catch (err) {
       logger.error('[Audio] Failed to start recording:', err);
       updateStatus('ERROR');
-      stopAudioRef.current();
-      streamerRef.current?.disconnect();
+      stopAudio();
+      disconnectSocket();
     }
-  }, [socketUrl, updateStatus, startMicCapture]);
+  }, [
+    useBrowserTts,
+    ttsVoiceName,
+    ttsRate,
+    resetSpeechTranscript,
+    resetCaptureBuffers,
+    connectSocket,
+    stopAudio,
+    disconnectSocket,
+    updateStatus,
+  ]);
 
+  const forceCleanup = useCallback((): void => {
+    clearTimeout(sttTimeoutRef.current ?? undefined);
+    clearTimeout(llmTimeoutRef.current ?? undefined);
+    stopAudio();
+    sendSpeechEndSignal();
+    disconnectSocket();
+    
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    playoutQueueRef.current?.stop();
+    playoutQueueRef.current = null;
+  }, [stopAudio, sendSpeechEndSignal, disconnectSocket]);
 
+  useEffect(() => {
+    return () => forceCleanup();
+  }, [forceCleanup]);
 
   const resetSession = useCallback((): void => {
     forceCleanup();
     updateStatus('IDLE');
-    setTranscript('');
+    resetSpeechTranscript();
     setLlmText('');
     setChatHistory([]);
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
     setSuggestions([]);
-  }, [forceCleanup, updateStatus]);
+  }, [forceCleanup, resetSpeechTranscript, updateStatus]);
 
   return {
     isRecording,

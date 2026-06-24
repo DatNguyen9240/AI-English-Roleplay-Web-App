@@ -31,7 +31,8 @@ class TokenAggregator {
     this._buffer += token;
     this._tokenCount++;
 
-    const hasBoundary = /\n/.test(token);
+    // Match standard sentence endings (. ? !) or newline, avoiding decimals (e.g. 3.14)
+    const hasBoundary = /[\n]/.test(token) || (/[.!?]/.test(token) && !/\d\.\d/.test(token));
     const thresholdReached = this._tokenCount >= this.tokenThreshold;
 
     if (hasBoundary || thresholdReached) {

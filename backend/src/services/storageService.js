@@ -61,11 +61,7 @@ class S3AudioStorage extends AudioStorageService {
   }
 
   async saveWavRecording(socketId, _buffers) {
-    // TODO: AWS SDK integration
-    return {
-      fileName: `s3://${this.bucketName}/recordings/recording_${socketId}.wav`,
-      totalBytes: 0,
-    };
+    throw new Error('S3AudioStorage is not implemented yet. AWS SDK integration is required.');
   }
 }
 

@@ -61,15 +61,20 @@ const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
   : [];
 
+/**
+ * Shared CORS origin resolver logic.
+ * Ensures consistent handling for both Express HTTP requests and Socket.IO handshakes.
+ */
+function resolveCorsOrigin(origin, callback) {
+  if (!origin || allowedOrigins.length === 0 || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+    callback(null, true);
+  } else {
+    callback(new Error('Not allowed by CORS'));
+  }
+}
+
 const corsOptions = {
-  origin: (origin, callback) => {
-    // If FRONTEND_URL is not set, or request has no origin (like curl), or matches allowedOrigins, or not in prod
-    if (!origin || allowedOrigins.length === 0 || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: resolveCorsOrigin,
   credentials: true,
 };
 
@@ -98,13 +103,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.length === 0 || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: resolveCorsOrigin,
     methods: ['GET', 'POST'],
     credentials: true,
   },
