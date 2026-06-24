@@ -543,7 +543,7 @@ export function AudioDashboard({
                           return (
                             <span>
                               {beforeText && <span className="opacity-60">{beforeText}</span>}
-                              <span className="bg-white/15 text-white px-1.5 py-0.5 rounded">
+                              <span className="bg-white/15 text-white rounded-sm">
                                 {currentPlayingSentence}
                               </span>
                               {afterText && <span className="opacity-60">{afterText}</span>}
