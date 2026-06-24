@@ -5,7 +5,6 @@ import { Mic, Send, RotateCcw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BlurText } from '@/components/react-bits/BlurText';
-import { Magnet } from '@/components/react-bits/Magnet';
 
 interface AudioDashboardProps {
   isRecording: boolean;
@@ -81,7 +80,7 @@ export function AudioDashboard({
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto flex flex-col h-[85vh] justify-between p-4 font-sans text-neutral-200">
+    <div className="w-full max-w-2xl mx-auto flex flex-col h-[94vh] justify-between p-4 font-sans text-neutral-200">
       
       {/* 1. Header Area */}
       <header className="flex justify-between items-center py-4 border-b border-neutral-800">
@@ -142,6 +141,17 @@ export function AudioDashboard({
             {/* Scrollable messages log */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {chatHistory.map((message) => {
+                if (message.text.startsWith('[Conversation Topic:') && message.text.endsWith(']')) {
+                  const topicName = message.text.slice('[Conversation Topic:'.length, -1).trim();
+                  return (
+                    <div key={message.id} className="w-full flex justify-center py-2 animate-fade-in">
+                      <div className="text-[10px] px-3 py-1 rounded-full border border-neutral-800 bg-neutral-900 text-neutral-400 font-mono uppercase tracking-wider">
+                        Topic: {topicName}
+                      </div>
+                    </div>
+                  );
+                }
+
                 const isUser = message.sender === 'user';
                 return (
                   <div
@@ -228,18 +238,20 @@ export function AudioDashboard({
           
           {/* Floating Suggestion Answer Chips */}
           {suggestions.length > 0 && (
-            <div className="flex flex-wrap gap-2 justify-center py-2 animate-fade-in">
+            <div className="flex flex-col gap-2 animate-fade-in max-h-32 overflow-y-auto border border-neutral-800/60 bg-neutral-950 p-2.5 rounded-lg">
+              <div className="text-[9px] uppercase font-mono tracking-wider text-neutral-500 mb-1">
+                Suggested reply (Click to send):
+              </div>
               {suggestions.map((suggestion, idx) => (
-                <Button
+                <button
                   key={idx}
+                  type="button"
                   onClick={() => sendTextMessage(suggestion)}
                   disabled={isLlmResponding}
-                  variant="outline"
-                  size="sm"
-                  className="text-xs px-3 py-1 rounded-full border border-neutral-800 hover:border-neutral-600 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white transition-all duration-200 text-left max-w-full truncate disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full text-left text-xs py-2 px-3 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 rounded-lg text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal"
                 >
                   {suggestion}
-                </Button>
+                </button>
               ))}
             </div>
           )}
@@ -265,22 +277,19 @@ export function AudioDashboard({
               </Button>
             </form>
 
-            {/* Magnetic Mic Button using React Bits Magnet */}
-            <Magnet range={70} strength={25} disabled={status === 'PROCESSING' || status === 'THINKING'}>
-              <Button
-                onClick={handleMicClick}
-                disabled={status === 'PROCESSING' || status === 'THINKING'}
-                size="icon"
-                className={`h-10 w-10 rounded-full border transition-all duration-300 ${
-                  isRecording
-                    ? 'bg-white border-white text-black animate-pulse-neutral'
-                    : 'bg-neutral-900 border-neutral-800 text-white hover:border-neutral-600 hover:bg-neutral-850'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-                title={isRecording ? "Stop Recording" : "Start Voice Input"}
-              >
-                <Mic className="w-4 h-4" />
-              </Button>
-            </Magnet>
+            <Button
+              onClick={handleMicClick}
+              disabled={status === 'PROCESSING' || status === 'THINKING'}
+              size="icon"
+              className={`h-10 w-10 rounded-full border transition-all duration-300 ${
+                isRecording
+                  ? 'bg-white border-white text-black animate-pulse-neutral'
+                  : 'bg-neutral-900 border-neutral-800 text-white hover:border-neutral-600 hover:bg-neutral-850'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={isRecording ? "Stop Recording" : "Start Voice Input"}
+            >
+              <Mic className="w-4 h-4" />
+            </Button>
           </div>
 
           {/* Simple status hint bar */}
