@@ -27,6 +27,17 @@ if (typeof window !== 'undefined' && window.speechSynthesis) {
   }
 }
 
+export function robustSpeechCancel(): void {
+  if (typeof window !== 'undefined' && window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+      window.speechSynthesis.pause();
+      window.speechSynthesis.resume();
+      window.speechSynthesis.cancel();
+    }
+  }
+}
+
 function getEnglishVoice(): SpeechSynthesisVoice | null {
   if (typeof window === 'undefined' || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices();
@@ -521,17 +532,15 @@ export class PlaybackQueueManager {
     this.activeUtterancesCount = 0;
     this.currentPlayingChunk = null;
 
+    // Cancel any browser speech synthesis robustly first
+    robustSpeechCancel();
+
     if (this.activeUtterance) {
       this.activeUtterance.onstart = null;
       this.activeUtterance.onboundary = null;
       this.activeUtterance.onend = null;
       this.activeUtterance.onerror = null;
       this.activeUtterance = null;
-    }
-
-    // Cancel any browser speech synthesis
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
     }
     
     // Stop all active audio sources
@@ -578,9 +587,7 @@ export class PlaybackQueueManager {
       this.activeUtterancesCount = Math.max(0, this.activeUtterancesCount - 1);
       
       this.isChangingSettings = true;
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+      robustSpeechCancel();
       setTimeout(() => {
         this.isChangingSettings = false;
         if (this.currentPlayingChunk && this.isPlaying) {

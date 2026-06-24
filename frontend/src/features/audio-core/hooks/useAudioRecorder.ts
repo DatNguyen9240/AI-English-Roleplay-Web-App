@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { audioConfig } from '../config/audioConfig';
-import { PlaybackQueueManager } from '../queue/PlaybackQueueManager';
+import { PlaybackQueueManager, robustSpeechCancel } from '../queue/PlaybackQueueManager';
 import { logger } from '@/utils/logger';
 import { RecordingStatus } from 'shared-contracts';
 
@@ -206,9 +206,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setHighlightedWordIndex(-1);
     updateStatus('THINKING');
 
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    robustSpeechCancel();
 
     setChatHistory((prev) => [
       ...prev,
@@ -383,9 +381,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     if (!text.trim()) return;
     logger.log('[useAudioRecorder] Sending user text message:', text);
     
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    robustSpeechCancel();
     
     resetCaptureBuffers();
     sendTextInput(text);
@@ -574,7 +570,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     logger.log('[Speech] Speaking text:', cleanText);
 
     if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+      robustSpeechCancel();
       
       const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = 'en-US';
