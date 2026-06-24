@@ -59,6 +59,7 @@ export function AudioDashboard({
   const [textInput, setTextInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   
   const [targetBand, setTargetBand] = useState('7.0');
   const [ieltsPart, setIeltsPart] = useState('general');
@@ -66,16 +67,23 @@ export function AudioDashboard({
   const [part2Phase, setPart2Phase] = useState<'idle' | 'delivery' | 'prep' | 'speaking' | 'done'>('idle');
   const [prepTimeLeft, setPrepTimeLeft] = useState(60);
   const [speakingTimeLeft, setSpeakingTimeLeft] = useState(120);
+  const [showSuggestions, setShowSuggestions] = useState(true);
 
   const isSessionActive = chatHistory.length > 0 || (status !== 'IDLE' && status !== 'ERROR');
   const isLlmResponding = status === 'THINKING' || status === 'PROCESSING';
 
-  // Auto-scroll to the bottom of the chat
+  // Auto-scroll to the bottom of the chat, or scroll to top for cue card preparation
   useEffect(() => {
+    if (activeIeltsPart === 'part2' && (part2Phase === 'prep' || part2Phase === 'delivery')) {
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTop = 0;
+      }
+      return;
+    }
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [chatHistory, transcript, status]);
+  }, [chatHistory, transcript, status, activeIeltsPart, part2Phase]);
 
   const handleStartPractice = (e: React.FormEvent) => {
     e.preventDefault();
@@ -387,35 +395,48 @@ export function AudioDashboard({
             
             {/* IELTS Part 2 (Cue Card) countdown timer visualizer */}
             {activeIeltsPart === 'part2' && part2Phase !== 'idle' && part2Phase !== 'done' && (
-              <div className="bg-neutral-900 border-b border-neutral-800 p-4 flex items-center justify-between text-left animate-fade-in">
-                <div className="flex items-center gap-3">
-                  <div className={`w-2.5 h-2.5 rounded-full ${part2Phase === 'prep' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500 animate-pulse-neutral'}`} />
-                  <div>
-                    <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-                      {part2Phase === 'delivery' && 'Step 1: Examiner Delivering Cue Card'}
-                      {part2Phase === 'prep' && 'Step 2: Preparation Time (1 Minute)'}
-                      {part2Phase === 'speaking' && 'Step 3: Speaking Time (1-2 Minutes)'}
-                    </h3>
-                    <p className="text-[11px] text-neutral-400 mt-0.5">
-                      {part2Phase === 'delivery' && 'Please listen to the prompt and instructions...'}
-                      {part2Phase === 'prep' && 'Take notes. The microphone will open automatically.'}
-                      {part2Phase === 'speaking' && 'Speak continuously. Click the microphone button when done.'}
-                    </p>
-                  </div>
-                </div>
-                
-                {(part2Phase === 'prep' || part2Phase === 'speaking') && (
-                  <div className="bg-neutral-950 px-3.5 py-2 border border-neutral-800 rounded-lg text-right min-w-[80px]">
-                    <div className="text-[10px] text-neutral-500 uppercase tracking-wider font-mono">Time Left</div>
-                    <div className={`text-lg font-bold font-mono ${part2Phase === 'prep' ? 'text-amber-500' : 'text-rose-500'}`}>
-                      {part2Phase === 'prep' ? prepTimeLeft : speakingTimeLeft}s
+              <div className="bg-neutral-900 border-b border-neutral-800 p-4 flex flex-col gap-3 text-left animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2.5 h-2.5 rounded-full ${part2Phase === 'prep' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500 animate-pulse-neutral'}`} />
+                    <div>
+                      <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                        {part2Phase === 'delivery' && 'Step 1: Examiner Delivering Cue Card'}
+                        {part2Phase === 'prep' && 'Step 2: Preparation Time (1 Minute)'}
+                        {part2Phase === 'speaking' && 'Step 3: Speaking Time (1-2 Minutes)'}
+                      </h3>
+                      <p className="text-[11px] text-neutral-400 mt-0.5">
+                        {part2Phase === 'delivery' && 'Please listen to the prompt and instructions...'}
+                        {part2Phase === 'prep' && 'Take notes. The microphone will open automatically.'}
+                        {part2Phase === 'speaking' && 'Speak continuously. Click the microphone button when done.'}
+                      </p>
                     </div>
+                  </div>
+                  
+                  {(part2Phase === 'prep' || part2Phase === 'speaking') && (
+                    <div className="bg-neutral-950 px-3.5 py-2 border border-neutral-800 rounded-lg text-right min-w-[80px]">
+                      <div className="text-[10px] text-neutral-500 uppercase tracking-wider font-mono">Time Left</div>
+                      <div className={`text-lg font-bold font-mono ${part2Phase === 'prep' ? 'text-amber-500' : 'text-rose-500'}`}>
+                        {part2Phase === 'prep' ? prepTimeLeft : speakingTimeLeft}s
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {part2Phase === 'prep' && suggestions.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-3.5 border-t border-neutral-800/80">
+                    <span className="text-[9px] uppercase font-mono tracking-wider text-neutral-500 w-full mb-1">Useful Vocabulary / Ideas:</span>
+                    {suggestions.map((vocab, idx) => (
+                      <span key={idx} className="px-2.5 py-1 bg-neutral-950/60 border border-neutral-800/60 rounded-md text-[11px] text-amber-400 font-mono">
+                        {vocab}
+                      </span>
+                    ))}
                   </div>
                 )}
               </div>
             )}
             {/* Scrollable messages log */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
               {chatHistory.map((message) => {
                 if (message.text.startsWith('[Conversation Topic:') && message.text.endsWith(']')) {
                   const topicName = message.text.slice('[Conversation Topic:'.length, -1).trim();
@@ -537,22 +558,34 @@ export function AudioDashboard({
         <footer className="space-y-4 pt-4">
           
           {/* Floating Suggestion Answer Chips */}
-          {suggestions.length > 0 && (
-            <div className="flex flex-col gap-2.5 animate-fade-in max-h-48 overflow-y-auto p-0 bg-transparent border-none">
-              <div className="text-[9px] uppercase font-mono tracking-wider text-neutral-500 mb-0.5">
-                Suggested reply (Click to send):
-              </div>
-              {suggestions.map((suggestion, idx) => (
+          {suggestions.length > 0 && part2Phase !== 'prep' && (
+            <div className="flex flex-col gap-2 animate-fade-in">
+              <div className="flex justify-between items-center text-[9px] uppercase font-mono tracking-wider text-neutral-500 mb-1">
+                <span>Suggested reply (Click to send):</span>
                 <button
-                  key={idx}
                   type="button"
-                  onClick={() => sendTextMessage(suggestion)}
-                  disabled={isLlmResponding}
-                  className="w-full text-left text-xs sm:text-sm py-2 px-3.5 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 rounded-xl text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal"
+                  onClick={() => setShowSuggestions(!showSuggestions)}
+                  className="hover:text-white transition-colors duration-150 underline decoration-dotted cursor-pointer lowercase"
                 >
-                  {suggestion}
+                  {showSuggestions ? '[hide]' : '[show]'}
                 </button>
-              ))}
+              </div>
+              
+              {showSuggestions && (
+                <div className="flex flex-col gap-2.5 max-h-48 overflow-y-auto p-0 bg-transparent border-none">
+                  {suggestions.map((suggestion, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => sendTextMessage(suggestion)}
+                      disabled={isLlmResponding}
+                      className="w-full text-left text-xs sm:text-sm py-2 px-3.5 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 rounded-xl text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
