@@ -19,7 +19,7 @@ export function PortfolioView({ activeTab, setActiveTab }: PortfolioViewProps): 
   const skillsRow2 = ['Socket.io', 'PostgreSQL', 'Prisma ORM', 'Docker', 'AI Prompt Engineering', 'Web Audio API'];
 
   return (
-    <div className="relative z-10 w-full max-w-4xl mx-auto flex flex-col min-h-screen px-4 sm:px-6 md:px-8 py-0 sm:py-4 font-sans text-neutral-200">
+    <div className="relative w-full min-h-screen font-sans text-neutral-200 overflow-x-hidden">
       {/* Background Animating Grid */}
       <div className="fixed inset-0 z-0 pointer-events-none opacity-[0.35]">
         <Squares
@@ -32,9 +32,10 @@ export function PortfolioView({ activeTab, setActiveTab }: PortfolioViewProps): 
         />
       </div>
 
+      <div className="relative z-10 w-full max-w-4xl mx-auto flex flex-col min-h-screen px-4 sm:px-6 md:px-8 py-0 sm:py-4">
         {/* 1. Header Area */}
-        <header className="flex justify-between items-center py-4 border-b border-neutral-800 shrink-0 gap-4 mb-8">
-          <div className="flex-1 flex items-center gap-2 min-w-0">
+        <header className="grid grid-cols-3 items-center py-4 border-b border-neutral-800 shrink-0 gap-4 mb-8">
+          <div className="flex items-center gap-2 min-w-0 justify-start">
             <Sparkles className="w-5 h-5 text-white animate-pulse" />
             <span className="font-bold tracking-tight text-white text-base sm:text-lg whitespace-nowrap">
               <DecryptedText text="Developer Hub" animateOn="load" speed={50} maxIterations={5} />
@@ -42,29 +43,31 @@ export function PortfolioView({ activeTab, setActiveTab }: PortfolioViewProps): 
           </div>
 
           {/* Navigation Switcher */}
-          <div className="flex shrink-0 bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg text-xs">
-            <button
-              onClick={() => setActiveTab('practice')}
-              className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${activeTab === 'practice'
-                ? 'bg-white text-black font-semibold'
-                : 'text-neutral-400 hover:text-white'
-                }`}
-            >
-              Practice
-            </button>
-            <button
-              onClick={() => setActiveTab('about')}
-              className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${activeTab === 'about'
-                ? 'bg-white text-black font-semibold'
-                : 'text-neutral-400 hover:text-white'
-                }`}
-            >
-              About Me
-            </button>
+          <div className="flex justify-center shrink-0">
+            <div className="flex bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg text-xs">
+              <button
+                onClick={() => setActiveTab('practice')}
+                className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${activeTab === 'practice'
+                  ? 'bg-white text-black font-semibold'
+                  : 'text-neutral-400 hover:text-white'
+                  }`}
+              >
+                Practice
+              </button>
+              <button
+                onClick={() => setActiveTab('about')}
+                className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${activeTab === 'about'
+                  ? 'bg-white text-black font-semibold'
+                  : 'text-neutral-400 hover:text-white'
+                  }`}
+              >
+                About Me
+              </button>
+            </div>
           </div>
 
           {/* Right Spacer for balanced centering */}
-          <div className="flex-1 flex items-center justify-end" />
+          <div className="flex items-center justify-end" />
         </header>
 
         {/* 2. Main Profile Content */}
@@ -208,5 +211,6 @@ export function PortfolioView({ activeTab, setActiveTab }: PortfolioViewProps): 
 
         </div>
       </div>
+    </div>
   );
 }
