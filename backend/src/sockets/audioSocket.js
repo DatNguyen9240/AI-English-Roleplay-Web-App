@@ -3,6 +3,7 @@ const { TokenAggregator } = require('@services/ai/tokenAggregator');
 const { SessionManager } = require('../session/sessionManager');
 const { STATES } = require('../state-machine/fsm');
 const configLogger = require('@config/logger');
+const { getTopicPrompt } = require('@services/ai/prompts');
 
 // Initialize SessionManager with config logger
 const sessionManager = new SessionManager(configLogger);
@@ -451,15 +452,7 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
     );
 
     // Set custom system prompt for the topic to generate a short passage first
-    session.customSystemPrompt = 
-      `You are a professional AI English tutor. Today's practice topic is: "${topic}". ` +
-      `Since this is the start of the conversation, you must write a short, engaging passage (around 50-80 words, 4-6 sentences) introducing or describing the topic "${topic}" in plain, friendly English. ` +
-      `Do NOT prefix this passage with labels like "Passage:" or "**Passage:**" or any title. Just start writing the passage content directly. ` +
-      `After the passage, ask the user what their thoughts or opinions are about this topic to start the discussion. ` +
-      `For all subsequent replies, keep your responses concise (2–3 sentences maximum), react to what the user says, and ask follow-up questions to keep the conversation flowing. ` +
-      `Never use bullet points, list numbers, or markdown formatting in your main response. Speak in clear, plain English. ` +
-      `At the very end of your response, you MUST provide exactly 1 detailed, longer sample answer that the user can use to reply to your question, enclosed in <suggestions>...</suggestions> tags. ` +
-      `The suggestion must be formatted as a JSON array containing a single string, for example: <suggestions>["I think this topic is very interesting because it affects our daily lives and how we interact with technology."]</suggestions>`;
+    session.customSystemPrompt = getTopicPrompt(topic);
 
     try {
       // Transition FSM to processing then thinking
