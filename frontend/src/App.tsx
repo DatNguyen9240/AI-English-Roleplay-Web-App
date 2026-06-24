@@ -23,6 +23,7 @@ function App(): React.ReactElement {
     useBrowserStt,
     toggleBrowserStt,
     startMicManual,
+    interruptAi,
     resetSession,
     ttsVoiceName,
     changeTtsVoiceName,
@@ -50,6 +51,7 @@ function App(): React.ReactElement {
           startRecording={startRecording}
           stopRecording={stopRecording}
           startMicManual={startMicManual}
+          interruptAi={interruptAi}
           sendTextMessage={sendTextMessage}
           resetSession={resetSession}
           suggestions={suggestions}

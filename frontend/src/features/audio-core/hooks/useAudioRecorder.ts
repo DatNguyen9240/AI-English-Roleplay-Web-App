@@ -33,6 +33,7 @@ export interface UseAudioRecorderReturn {
   useBrowserStt: boolean;
   toggleBrowserStt: (val: boolean) => void;
   startMicManual: () => Promise<void>;
+  interruptAi: () => void;
   resetSession: () => void;
   ttsVoiceName: string | null;
   changeTtsVoiceName: (val: string | null) => void;
@@ -377,6 +378,32 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setIsRecording(true);
   }, [updateStatus, sendUserInterruptSignal, resetCaptureBuffers]);
 
+  const interruptAi = useCallback((): void => {
+    logger.log('[useAudioRecorder] Manually interrupting AI speech (mic closed)');
+    playoutQueueRef.current?.stop();
+    robustSpeechCancel();
+    setCurrentPlayingSentence('');
+    setHighlightedWordIndex(-1);
+
+    sendUserInterruptSignal();
+
+    setChatHistory((history) =>
+      history.map((msg) =>
+        msg.id === 'ai-current'
+          ? {
+              ...msg,
+              id: `ai-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+              text: msg.text.trim() + '... [interrupted]',
+            }
+          : msg
+      )
+    );
+
+    setIsRecording(false);
+    resetCaptureBuffers();
+    updateStatus('IDLE');
+  }, [sendUserInterruptSignal, updateStatus, resetCaptureBuffers]);
+
   const sendTextMessage = useCallback((text: string): void => {
     if (!text.trim()) return;
     logger.log('[useAudioRecorder] Sending user text message:', text);
@@ -631,6 +658,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     useBrowserStt,
     toggleBrowserStt,
     startMicManual,
+    interruptAi,
     resetSession,
     ttsVoiceName,
     changeTtsVoiceName,

@@ -17,6 +17,7 @@ interface AudioDashboardProps {
   startRecording: (topic?: string, targetBand?: string, ieltsPart?: string) => void;
   stopRecording: () => void;
   startMicManual: () => void;
+  interruptAi: () => void;
   sendTextMessage: (text: string) => void;
   resetSession: () => void;
   suggestions: string[];
@@ -45,6 +46,7 @@ export function AudioDashboard({
   startRecording,
   stopRecording,
   startMicManual,
+  interruptAi,
   sendTextMessage,
   resetSession,
   suggestions,
@@ -184,7 +186,9 @@ export function AudioDashboard({
   };
 
   const handleMicClick = () => {
-    if (isRecording) {
+    if (status === 'SPEAKING') {
+      interruptAi();
+    } else if (isRecording) {
       stopRecording();
     } else {
       startMicManual();
@@ -548,7 +552,8 @@ export function AudioDashboard({
                                   return (
                                     <span
                                       key={wIdx}
-                                      className={isWordSpoken ? "transition-opacity duration-150" : "opacity-0 select-none pointer-events-none"}
+                                      className={isWordSpoken ? "transition-opacity duration-150" : "select-none pointer-events-none"}
+                                      style={isWordSpoken ? undefined : { opacity: 0 }}
                                     >
                                       {word}{wIdx < words.length - 1 ? ' ' : ''}
                                     </span>
@@ -556,7 +561,7 @@ export function AudioDashboard({
                                 })}
                               </span>
                               {afterText && (
-                                <span className="opacity-0 select-none pointer-events-none">
+                                <span className="select-none pointer-events-none" style={{ opacity: 0 }}>
                                   {afterText}
                                 </span>
                               )}
