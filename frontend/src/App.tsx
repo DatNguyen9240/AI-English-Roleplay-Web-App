@@ -10,7 +10,6 @@ function App(): React.ReactElement {
     status,
     rmsVolume,
     transcript,
-    llmText,
     chatHistory,
     currentPlayingSentence,
     highlightedWordIndex,
@@ -42,6 +41,7 @@ function App(): React.ReactElement {
         transcript={transcript}
         chatHistory={chatHistory}
         currentPlayingSentence={currentPlayingSentence}
+        highlightedWordIndex={highlightedWordIndex}
         startRecording={startRecording}
         stopRecording={stopRecording}
         startMicManual={startMicManual}
@@ -53,6 +53,10 @@ function App(): React.ReactElement {
         ttsRate={ttsRate}
         changeTtsRate={changeTtsRate}
         availableVoices={availableVoices}
+        useBrowserTts={useBrowserTts}
+        toggleBrowserTts={toggleBrowserTts}
+        useBrowserStt={useBrowserStt}
+        toggleBrowserStt={toggleBrowserStt}
       />
     </PageShell>
   );

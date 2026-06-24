@@ -203,6 +203,10 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setHighlightedWordIndex(-1);
     updateStatus('THINKING');
 
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
     setChatHistory((prev) => [
       ...prev,
       {
@@ -376,6 +380,10 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     if (!text.trim()) return;
     logger.log('[useAudioRecorder] Sending user text message:', text);
     
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    
     resetCaptureBuffers();
     sendTextInput(text);
     updateStatus('PROCESSING');
@@ -407,6 +415,27 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   }, [useBrowserStt, stopSpeechRecognition, sendTextMessage, updateStatus, sendSpeechEndSignal, stopAudio, disconnectSocket]);
 
   const startMicManual = useCallback(async () => {
+    // If AI is speaking or thinking, interrupt it!
+    if (statusRef.current === 'SPEAKING' || statusRef.current === 'THINKING') {
+      logger.log('[useAudioRecorder] Manual Mic click during AI turn — Interrupting AI');
+      playoutQueueRef.current?.stop();
+      setCurrentPlayingSentence('');
+      setHighlightedWordIndex(-1);
+      sendUserInterruptSignal();
+
+      setChatHistory((history) =>
+        history.map((msg) =>
+          msg.id === 'ai-current'
+            ? {
+                ...msg,
+                id: `ai-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+                text: msg.text.trim() + '... [interrupted]',
+              }
+            : msg
+        )
+      );
+    }
+
     resetSpeechTranscript();
     setIsRecording(true);
     updateStatus('LISTENING');
@@ -432,7 +461,14 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       logger.error('[Manual Mic] Failed to start:', err);
       updateStatus('ERROR');
     }
-  }, [useBrowserStt, startSpeechRecognition, resetSpeechTranscript, startCapture, updateStatus]);
+  }, [
+    useBrowserStt,
+    startSpeechRecognition,
+    resetSpeechTranscript,
+    startCapture,
+    updateStatus,
+    sendUserInterruptSignal,
+  ]);
 
   const startRecording = useCallback(async (topic?: string): Promise<void> => {
     setIsRecording(false);

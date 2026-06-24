@@ -408,8 +408,15 @@ export class PlaybackQueueManager {
         }
       };
 
-      utterance.onend = () => {
-        logger.log(`[BrowserTTS] Playback finished: "${sentenceText}"`);
+      let safetyTimeout: ReturnType<typeof setTimeout> | null = null;
+
+      const onEndHandler = () => {
+        logger.log(`[BrowserTTS] Playback finished or aborted for: "${sentenceText}"`);
+        if (safetyTimeout) {
+          clearTimeout(safetyTimeout);
+          this.activeTimeouts.delete(safetyTimeout);
+          safetyTimeout = null;
+        }
         if (this.activeUtterance === utterance) {
           this.activeUtterance = null;
         }
@@ -424,26 +431,36 @@ export class PlaybackQueueManager {
           this.processQueue();
         }
       };
+
+      utterance.onend = onEndHandler;
 
       utterance.onerror = (err) => {
         logger.error('[BrowserTTS] Speech synthesis error:', err);
-        if (this.activeUtterance === utterance) {
-          this.activeUtterance = null;
-        }
-        this.activeUtterancesCount = Math.max(0, this.activeUtterancesCount - 1);
-        cleanupTimeouts();
-        if (this.isChangingSettings) {
-          return;
-        }
-        this.currentPlayingChunk = null;
-        this.checkQueueEmpty(chunk.requestId);
-        if (this.isPlaying) {
-          this.processQueue();
-        }
+        onEndHandler();
       };
+
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        if (window.speechSynthesis.paused) {
+          logger.log('[BrowserTTS] SpeechSynthesis was paused. Resuming.');
+          window.speechSynthesis.resume();
+        }
+      }
 
       this.activeUtterancesCount++;
       window.speechSynthesis.speak(utterance);
+
+      // Safety timeout: Chrome can get stuck and fail to trigger onend/onerror
+      const estimatedDurationMs = (sentenceText.length * 120) / (this.ttsRate || 1.0) + 4000;
+      safetyTimeout = setTimeout(() => {
+        if (this.activeUtterance === utterance) {
+          logger.warn(`[BrowserTTS] Safety timeout reached for sentence: "${sentenceText}". Forcing end.`);
+          if (typeof window !== 'undefined' && window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+          }
+          onEndHandler();
+        }
+      }, estimatedDurationMs);
+      this.activeTimeouts.add(safetyTimeout);
     } catch (err) {
       logger.error('[BrowserTTS] Failed to execute speak:', err);
       this.currentPlayingChunk = null;

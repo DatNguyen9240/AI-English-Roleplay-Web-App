@@ -13,6 +13,7 @@ interface AudioDashboardProps {
   transcript: string;
   chatHistory: ChatMessage[];
   currentPlayingSentence?: string;
+  highlightedWordIndex?: number;
   startRecording: (topic?: string) => void;
   stopRecording: () => void;
   startMicManual: () => void;
@@ -24,6 +25,10 @@ interface AudioDashboardProps {
   ttsRate: number;
   changeTtsRate: (val: number) => void;
   availableVoices: SpeechSynthesisVoice[];
+  useBrowserTts: boolean;
+  toggleBrowserTts: (val: boolean) => void;
+  useBrowserStt: boolean;
+  toggleBrowserStt: (val: boolean) => void;
 }
 
 export function AudioDashboard({
@@ -33,6 +38,7 @@ export function AudioDashboard({
   transcript,
   chatHistory,
   currentPlayingSentence,
+  highlightedWordIndex = -1,
   startRecording,
   stopRecording,
   startMicManual,
@@ -44,6 +50,10 @@ export function AudioDashboard({
   ttsRate,
   changeTtsRate,
   availableVoices,
+  useBrowserTts,
+  toggleBrowserTts,
+  useBrowserStt,
+  toggleBrowserStt,
 }: AudioDashboardProps): React.ReactElement {
   const [topicInput, setTopicInput] = useState('');
   const [textInput, setTextInput] = useState('');
@@ -133,7 +143,11 @@ export function AudioDashboard({
             {/* Voice Dropdown */}
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider font-bold">Accent (Giọng đọc)</label>
-              {availableVoices.length === 0 ? (
+              {!useBrowserTts ? (
+                <div className="text-xs text-neutral-500 italic py-2">
+                  Accent configuration requires Browser TTS enabled.
+                </div>
+              ) : availableVoices.length === 0 ? (
                 <div className="text-xs text-neutral-500 italic">
                   Loading system voices...
                 </div>
@@ -159,7 +173,8 @@ export function AudioDashboard({
               <select
                 value={ttsRate}
                 onChange={(e) => changeTtsRate(parseFloat(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-white text-xs focus:outline-none focus:border-neutral-500 cursor-pointer"
+                disabled={!useBrowserTts}
+                className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-white text-xs focus:outline-none focus:border-neutral-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="0.8">0.8x (Slow)</option>
                 <option value="1.0">1.0x (Normal)</option>
@@ -167,6 +182,34 @@ export function AudioDashboard({
                 <option value="1.5">1.5x (Fast)</option>
                 <option value="1.8">1.8x</option>
               </select>
+            </div>
+          </div>
+
+          <div className="border-t border-neutral-900 pt-3.5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex items-center justify-between bg-neutral-900/50 p-2.5 rounded-lg border border-neutral-900">
+              <div className="flex flex-col gap-0.5 pr-2">
+                <span className="text-xs font-semibold text-white">Browser TTS (Giọng đọc)</span>
+                <span className="text-[9px] text-neutral-500">Dùng giọng nói miễn phí của trình duyệt</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={useBrowserTts}
+                onChange={(e) => toggleBrowserTts(e.target.checked)}
+                className="w-4 h-4 rounded border-neutral-800 bg-neutral-900 text-white focus:ring-0 focus:ring-offset-0 cursor-pointer"
+              />
+            </div>
+
+            <div className="flex items-center justify-between bg-neutral-900/50 p-2.5 rounded-lg border border-neutral-900">
+              <div className="flex flex-col gap-0.5 pr-2">
+                <span className="text-xs font-semibold text-white">Browser STT (Nhận diện)</span>
+                <span className="text-[9px] text-neutral-500">Dùng nhận diện giọng nói trình duyệt</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={useBrowserStt}
+                onChange={(e) => toggleBrowserStt(e.target.checked)}
+                className="w-4 h-4 rounded border-neutral-800 bg-neutral-900 text-white focus:ring-0 focus:ring-offset-0 cursor-pointer"
+              />
             </div>
           </div>
         </div>
@@ -236,20 +279,44 @@ export function AudioDashboard({
                           : 'bg-neutral-900/40 border border-neutral-800 text-neutral-200'
                       }`}
                     >
-                      {/* Highlight current spoken sentence if AI */}
+                      {/* Real-time word-by-word lyrics highlight for AI messages */}
                       {!isUser && currentPlayingSentence && message.text.includes(currentPlayingSentence) ? (
-                        <span>
-                          {message.text.split(currentPlayingSentence).map((part, index, arr) => (
-                            <React.Fragment key={index}>
-                              {part}
-                              {index < arr.length - 1 && (
-                                <span className="bg-white text-black px-1 rounded-sm">
-                                  {currentPlayingSentence}
-                                </span>
-                              )}
-                            </React.Fragment>
-                          ))}
-                        </span>
+                        (() => {
+                          const startIndex = message.text.indexOf(currentPlayingSentence);
+                          const beforeText = message.text.substring(0, startIndex);
+                          const afterText = message.text.substring(startIndex + currentPlayingSentence.length);
+                          const words = currentPlayingSentence.split(' ');
+
+                          return (
+                            <span>
+                              {beforeText && <span className="text-neutral-200">{beforeText}</span>}
+                              
+                              <span className="inline-flex flex-wrap gap-x-1 border-b border-dashed border-neutral-800 pb-0.5 my-0.5">
+                                {words.map((word, wordIdx) => {
+                                  const isPast = wordIdx < highlightedWordIndex;
+                                  const isCurrent = wordIdx === highlightedWordIndex;
+                                  
+                                  return (
+                                    <span
+                                      key={wordIdx}
+                                      className={`transition-all duration-150 rounded px-0.5 ${
+                                        isCurrent
+                                          ? 'bg-white text-black font-semibold shadow-md scale-105 inline-block mx-0.5'
+                                          : isPast
+                                          ? 'text-neutral-200 font-medium'
+                                          : 'opacity-35 text-neutral-500 font-normal'
+                                      }`}
+                                    >
+                                      {word}
+                                    </span>
+                                  );
+                                })}
+                              </span>
+
+                              {afterText && <span className="opacity-35 text-neutral-500 transition-opacity duration-300">{afterText}</span>}
+                            </span>
+                          );
+                        })()
                       ) : (
                         message.text
                       )}
