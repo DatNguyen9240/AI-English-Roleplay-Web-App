@@ -403,7 +403,9 @@ export class PlaybackQueueManager {
             (pos) => charIndex >= pos.start && charIndex < pos.end
           );
           if (wordIndex !== -1 && this.onWordSpoken && this.isPlaying) {
-            this.onWordSpoken(chunk.words[wordIndex].text, wordIndex, sentenceText, chunk.words, chunk.requestId);
+            // Compensate for browser SpeechSynthesis asynchronous event dispatch lag by shifting index by +1
+            const adjustedIndex = Math.min(wordIndex + 1, chunk.words.length - 1);
+            this.onWordSpoken(chunk.words[adjustedIndex].text, adjustedIndex, sentenceText, chunk.words, chunk.requestId);
           }
         }
       };

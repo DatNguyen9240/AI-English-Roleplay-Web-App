@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RecordingStatus } from 'shared-contracts';
 import { ChatMessage } from '@/features/audio-core/hooks/useAudioRecorder';
-import { Mic, Send, RotateCcw, AlertCircle, Settings, Volume2 } from 'lucide-react';
+import { Mic, Send, RotateCcw, AlertCircle, Settings, Volume2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BlurText } from '@/components/react-bits/BlurText';
@@ -188,10 +188,10 @@ export function AudioDashboard({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto flex flex-col h-screen justify-between px-[15px] sm:px-6 md:px-8 py-4 font-sans text-neutral-200">
+    <div className="w-full max-w-4xl mx-auto flex flex-col h-[100dvh] justify-between px-0 sm:px-6 md:px-8 py-0 sm:py-4 font-sans text-neutral-200 overflow-hidden">
       
       {/* 1. Header Area */}
-      <header className="flex justify-between items-center py-4 border-b border-neutral-800">
+      <header className="flex justify-between items-center py-4 border-b border-neutral-800 px-4 sm:px-0">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <span className="font-bold tracking-tight text-white text-base sm:text-lg whitespace-nowrap hidden sm:inline-block">AI Tutor</span>
           {isSessionActive && (
@@ -246,94 +246,122 @@ export function AudioDashboard({
         </div>
       </header>
 
-      {/* Settings Panel */}
+      {/* Settings Modal */}
       {showSettings && (
-        <div className="bg-neutral-950 border border-neutral-900 rounded-lg p-4 my-2 space-y-4 animate-fade-in text-left">
-          <div className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-            Speech & Audio Settings
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Voice Dropdown */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider font-bold">Accent (Giọng đọc)</label>
-              {!useBrowserTts ? (
-                <div className="text-xs text-neutral-500 italic py-2">
-                  Accent configuration requires Browser TTS enabled.
-                </div>
-              ) : availableVoices.length === 0 ? (
-                <div className="text-xs text-neutral-500 italic">
-                  Loading system voices...
-                </div>
-              ) : (
+        <div 
+          className="fixed inset-0 bg-black/65 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setShowSettings(false)}
+        >
+          {/* Modal Content */}
+          <div 
+            className="bg-neutral-950 border border-neutral-900 rounded-xl p-5 max-w-md w-full space-y-4 shadow-2xl relative text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowSettings(false)}
+              className="absolute right-4 top-4 text-neutral-500 hover:text-white transition-colors duration-150 p-1.5 rounded-md hover:bg-neutral-900 cursor-pointer"
+              title="Close settings"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="text-xs font-bold text-white uppercase tracking-wider font-mono border-b border-neutral-900 pb-2">
+              Speech & Audio Settings
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Voice Dropdown */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider font-bold">Accent (Giọng đọc)</label>
+                {!useBrowserTts ? (
+                  <div className="text-xs text-neutral-500 italic py-2">
+                    Accent configuration requires Browser TTS enabled.
+                  </div>
+                ) : availableVoices.length === 0 ? (
+                  <div className="text-xs text-neutral-500 italic">
+                    Loading system voices...
+                  </div>
+                ) : (
+                  <select
+                    value={ttsVoiceName || ''}
+                    onChange={(e) => changeTtsVoiceName(e.target.value || null)}
+                    className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-white text-xs focus:outline-none focus:border-neutral-500 cursor-pointer"
+                  >
+                    <option value="">System Default</option>
+                    {availableVoices.map((voice) => (
+                      <option key={voice.name} value={voice.name}>
+                        {voice.name.replace(/Microsoft|Google|Natural/g, '').trim()} ({voice.lang})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Speed Dropdown */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider font-bold">Speed (Tốc độ đọc)</label>
                 <select
-                  value={ttsVoiceName || ''}
-                  onChange={(e) => changeTtsVoiceName(e.target.value || null)}
-                  className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-white text-xs focus:outline-none focus:border-neutral-500 cursor-pointer"
+                  value={ttsRate}
+                  onChange={(e) => changeTtsRate(parseFloat(e.target.value))}
+                  disabled={!useBrowserTts}
+                  className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-white text-xs focus:outline-none focus:border-neutral-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">System Default</option>
-                  {availableVoices.map((voice) => (
-                    <option key={voice.name} value={voice.name}>
-                      {voice.name.replace(/Microsoft|Google|Natural/g, '').trim()} ({voice.lang})
-                    </option>
-                  ))}
+                  <option value="0.8">0.8x (Slow)</option>
+                  <option value="1.0">1.0x (Normal)</option>
+                  <option value="1.2">1.2x</option>
+                  <option value="1.5">1.5x (Fast)</option>
+                  <option value="1.8">1.8x</option>
                 </select>
-              )}
+              </div>
             </div>
 
-            {/* Speed Dropdown */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider font-bold">Speed (Tốc độ đọc)</label>
-              <select
-                value={ttsRate}
-                onChange={(e) => changeTtsRate(parseFloat(e.target.value))}
-                disabled={!useBrowserTts}
-                className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-white text-xs focus:outline-none focus:border-neutral-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            <div className="border-t border-neutral-900 pt-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="flex items-center justify-between bg-neutral-900/50 p-2.5 rounded-lg border border-neutral-900">
+                <div className="flex flex-col gap-0.5 pr-2">
+                  <span className="text-xs font-semibold text-white">Browser TTS (Giọng đọc)</span>
+                  <span className="text-[9px] text-neutral-500">Dùng giọng nói miễn phí của trình duyệt</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={useBrowserTts}
+                  onChange={(e) => toggleBrowserTts(e.target.checked)}
+                  className="w-4 h-4 rounded border-neutral-800 bg-neutral-900 text-white focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center justify-between bg-neutral-900/50 p-2.5 rounded-lg border border-neutral-900">
+                <div className="flex flex-col gap-0.5 pr-2">
+                  <span className="text-xs font-semibold text-white">Browser STT (Nhận diện)</span>
+                  <span className="text-[9px] text-neutral-500">Dùng nhận diện giọng nói trình duyệt</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={useBrowserStt}
+                  onChange={(e) => toggleBrowserStt(e.target.checked)}
+                  className="w-4 h-4 rounded border-neutral-800 bg-neutral-900 text-white focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end pt-2">
+              <Button
+                type="button"
+                onClick={() => setShowSettings(false)}
+                className="w-full bg-white hover:bg-neutral-200 text-black text-xs font-bold py-2 rounded-lg transition-colors cursor-pointer"
               >
-                <option value="0.8">0.8x (Slow)</option>
-                <option value="1.0">1.0x (Normal)</option>
-                <option value="1.2">1.2x</option>
-                <option value="1.5">1.5x (Fast)</option>
-                <option value="1.8">1.8x</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="border-t border-neutral-900 pt-3.5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex items-center justify-between bg-neutral-900/50 p-2.5 rounded-lg border border-neutral-900">
-              <div className="flex flex-col gap-0.5 pr-2">
-                <span className="text-xs font-semibold text-white">Browser TTS (Giọng đọc)</span>
-                <span className="text-[9px] text-neutral-500">Dùng giọng nói miễn phí của trình duyệt</span>
-              </div>
-              <input
-                type="checkbox"
-                checked={useBrowserTts}
-                onChange={(e) => toggleBrowserTts(e.target.checked)}
-                className="w-4 h-4 rounded border-neutral-800 bg-neutral-900 text-white focus:ring-0 focus:ring-offset-0 cursor-pointer"
-              />
-            </div>
-
-            <div className="flex items-center justify-between bg-neutral-900/50 p-2.5 rounded-lg border border-neutral-900">
-              <div className="flex flex-col gap-0.5 pr-2">
-                <span className="text-xs font-semibold text-white">Browser STT (Nhận diện)</span>
-                <span className="text-[9px] text-neutral-500">Dùng nhận diện giọng nói trình duyệt</span>
-              </div>
-              <input
-                type="checkbox"
-                checked={useBrowserStt}
-                onChange={(e) => toggleBrowserStt(e.target.checked)}
-                className="w-4 h-4 rounded border-neutral-800 bg-neutral-900 text-white focus:ring-0 focus:ring-offset-0 cursor-pointer"
-              />
+                Done
+              </Button>
             </div>
           </div>
         </div>
       )}
 
       {/* 2. Main Practice Workspace */}
-      <div className="flex-1 flex flex-col min-h-0 py-6">
+      <div className="flex-1 flex flex-col min-h-0 py-0 sm:py-6">
         {!isSessionActive ? (
           /* Start Screen (Minimalist Topic Selector) */
-          <div className="flex-1 flex flex-col justify-center items-center max-w-xl mx-auto w-full text-center animate-fade-in">
+          <div className="flex-1 flex flex-col justify-center items-center max-w-xl mx-auto w-full text-center animate-fade-in px-4 sm:px-0">
             <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-white mb-2 whitespace-nowrap">
               <BlurText text="Practice Speaking English" delay={45} animateBy="words" />
             </h1>
@@ -393,7 +421,7 @@ export function AudioDashboard({
           </div>
         ) : (
           /* Active Chat Workspace */
-          <div className="flex-1 flex flex-col min-h-0 bg-neutral-950 border border-neutral-900 rounded-xl overflow-hidden shadow-inner">
+          <div className="flex-1 flex flex-col min-h-0 bg-neutral-950 sm:border sm:border-neutral-900 sm:rounded-xl border-0 rounded-none overflow-hidden shadow-inner">
             
             {/* IELTS Part 2 (Cue Card) countdown timer visualizer */}
             {activeIeltsPart === 'part2' && part2Phase !== 'idle' && part2Phase !== 'done' && (
@@ -569,7 +597,7 @@ export function AudioDashboard({
 
       {/* 3. Bottom Input Controls Area */}
       {isSessionActive && (
-        <footer className="space-y-4 pt-4">
+        <footer className="space-y-4 pt-4 px-4 sm:px-0 pb-4 sm:pb-0 shrink-0">
           
           {/* Floating Suggestion Answer Chips */}
           {suggestions.length > 0 && part2Phase !== 'prep' && (
@@ -588,15 +616,27 @@ export function AudioDashboard({
               {showSuggestions && (
                 <div className="flex flex-col gap-2.5 max-h-48 overflow-y-auto p-0 bg-transparent border-none">
                   {suggestions.map((suggestion, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => sendTextMessage(suggestion)}
-                      disabled={isLlmResponding}
-                      className="w-full text-left text-xs sm:text-sm py-2 px-3.5 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 rounded-xl text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal"
-                    >
-                      {suggestion}
-                    </button>
+                    <div key={idx} className="flex gap-2 items-stretch w-full">
+                      <button
+                        type="button"
+                        onClick={() => sendTextMessage(suggestion)}
+                        disabled={isLlmResponding}
+                        className="flex-1 text-left text-xs sm:text-sm py-2 px-3.5 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 rounded-xl text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal cursor-pointer"
+                      >
+                        {suggestion}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          speakText(suggestion);
+                        }}
+                        className="flex items-center justify-center px-3 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 hover:border-neutral-700 rounded-xl text-neutral-400 hover:text-white transition-all duration-150 cursor-pointer w-11 shrink-0"
+                        title="Speak this suggestion"
+                      >
+                        <Volume2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
