@@ -40,6 +40,7 @@ export interface UseAudioRecorderReturn {
   changeTtsRate: (val: number) => void;
   availableVoices: SpeechSynthesisVoice[];
   suggestions: string[];
+  replayLastQuestion: () => void;
 }
 
 /**
@@ -566,6 +567,52 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     return () => forceCleanup();
   }, [forceCleanup]);
 
+  const replayLastQuestion = useCallback((): void => {
+    const lastAiMsg = [...chatHistory].reverse().find((msg) => msg.sender === 'ai');
+    if (!lastAiMsg) {
+      logger.warn('[Replay] No AI message found to replay');
+      return;
+    }
+
+    const cleanText = lastAiMsg.text.replace(/<suggestions>[\s\S]*?<\/suggestions>/g, '').trim();
+    if (!cleanText) return;
+
+    logger.log('[Replay] Replaying last AI prompt:', cleanText);
+
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = 'en-US';
+      
+      const voices = window.speechSynthesis.getVoices();
+      let englishVoice: SpeechSynthesisVoice | null = null;
+      if (ttsVoiceName) {
+        englishVoice = voices.find(v => v.name === ttsVoiceName) || null;
+      }
+      if (!englishVoice) {
+        englishVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Natural')) ||
+                       voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.localService)) ||
+                       voices.find(v => v.lang.startsWith('en')) ||
+                       voices.find(v => v.default) || null;
+      }
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+      }
+      utterance.rate = ttsRate;
+
+      updateStatus('SPEAKING');
+      utterance.onend = () => {
+        updateStatus('IDLE');
+      };
+      utterance.onerror = () => {
+        updateStatus('IDLE');
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+  }, [chatHistory, ttsVoiceName, ttsRate, updateStatus]);
+
   const resetSession = useCallback((): void => {
     forceCleanup();
     updateStatus('IDLE');
@@ -601,5 +648,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     changeTtsRate,
     availableVoices,
     suggestions,
+    replayLastQuestion,
   };
 }

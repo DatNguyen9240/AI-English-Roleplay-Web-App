@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RecordingStatus } from 'shared-contracts';
 import { ChatMessage } from '@/features/audio-core/hooks/useAudioRecorder';
-import { Mic, Send, RotateCcw, AlertCircle, Settings } from 'lucide-react';
+import { Mic, Send, RotateCcw, AlertCircle, Settings, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BlurText } from '@/components/react-bits/BlurText';
@@ -20,6 +20,7 @@ interface AudioDashboardProps {
   sendTextMessage: (text: string) => void;
   resetSession: () => void;
   suggestions: string[];
+  replayLastQuestion: () => void;
   ttsVoiceName: string | null;
   changeTtsVoiceName: (val: string | null) => void;
   ttsRate: number;
@@ -45,6 +46,7 @@ export function AudioDashboard({
   sendTextMessage,
   resetSession,
   suggestions,
+  replayLastQuestion,
   ttsVoiceName,
   changeTtsVoiceName,
   ttsRate,
@@ -229,17 +231,31 @@ export function AudioDashboard({
             <Settings className="w-4 h-4" />
           </Button>
           {isSessionActive && (
-            <Button
-              type="button"
-              onClick={handleResetSession}
-              variant="outline"
-              size="sm"
-              title="Reset practice topic"
-              className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition-colors duration-200"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>New Topic</span>
-            </Button>
+            <>
+              <Button
+                type="button"
+                onClick={replayLastQuestion}
+                variant="outline"
+                size="sm"
+                title="Speak the latest tutor question again"
+                className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition-colors duration-200"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>Repeat Question</span>
+              </Button>
+              
+              <Button
+                type="button"
+                onClick={handleResetSession}
+                variant="outline"
+                size="sm"
+                title="Reset practice topic"
+                className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition-colors duration-200"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>New Topic</span>
+              </Button>
+            </>
           )}
         </div>
       </header>
