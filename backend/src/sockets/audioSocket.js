@@ -437,7 +437,7 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       return;
     }
 
-    const { topic } = data;
+    const { topic, targetBand, ieltsPart } = data;
     if (!topic || typeof topic !== 'string') {
       logger.warn({ sessionId: socket.id }, 'Received set-topic with empty or invalid topic');
       return;
@@ -447,12 +447,12 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
     session.currentRequestId = requestId;
 
     logger.info(
-      { sessionId: socket.id, requestId, topic },
+      { sessionId: socket.id, requestId, topic, targetBand, ieltsPart },
       'USER_SET_SCENARIO_TOPIC'
     );
 
     // Set custom system prompt for the topic to generate a short passage first
-    session.customSystemPrompt = getTopicPrompt(topic);
+    session.customSystemPrompt = getTopicPrompt(topic, targetBand, ieltsPart);
 
     try {
       // Transition FSM to processing then thinking

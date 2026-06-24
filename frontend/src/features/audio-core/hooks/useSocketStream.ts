@@ -104,8 +104,8 @@ export function useSocketStream({
     streamerRef.current?.sendTextInput(text);
   }, []);
 
-  const sendTopic = useCallback((topic: string) => {
-    streamerRef.current?.sendTopic(topic);
+  const sendTopic = useCallback((topic: string, targetBand?: string, ieltsPart?: string) => {
+    streamerRef.current?.sendTopic(topic, targetBand, ieltsPart);
   }, []);
 
   // Cleanup on unmount

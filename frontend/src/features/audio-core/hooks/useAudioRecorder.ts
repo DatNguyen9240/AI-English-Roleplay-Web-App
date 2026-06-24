@@ -25,7 +25,7 @@ export interface UseAudioRecorderReturn {
   chatHistory: ChatMessage[];
   currentPlayingSentence: string;
   highlightedWordIndex: number;
-  startRecording: (topic?: string) => Promise<void>;
+  startRecording: (topic?: string, targetBand?: string, ieltsPart?: string) => Promise<void>;
   stopRecording: () => void;
   sendTextMessage: (text: string) => void;
   useBrowserTts: boolean;
@@ -94,6 +94,8 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   statusRef.current = status;
 
   const topicRef = useRef<string | undefined>(undefined);
+  const targetBandRef = useRef<string | undefined>(undefined);
+  const ieltsPartRef = useRef<string | undefined>(undefined);
   const audioContextRef = useRef<AudioContext | null>(null);
   const playoutQueueRef = useRef<PlaybackQueueManager | null>(null);
   const sttTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -178,8 +180,8 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const handleConnect = useCallback(() => {
     logger.log('[Socket] Connected to backend');
     if (topicRef.current) {
-      logger.log('[useAudioRecorder] Sending custom topic to backend:', topicRef.current);
-      sendTopic(topicRef.current);
+      logger.log('[useAudioRecorder] Sending custom topic to backend:', topicRef.current, targetBandRef.current, ieltsPartRef.current);
+      sendTopic(topicRef.current, targetBandRef.current, ieltsPartRef.current);
     }
   }, []);
 
@@ -470,7 +472,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     sendUserInterruptSignal,
   ]);
 
-  const startRecording = useCallback(async (topic?: string): Promise<void> => {
+  const startRecording = useCallback(async (topic?: string, targetBand?: string, ieltsPart?: string): Promise<void> => {
     setIsRecording(false);
     updateStatus('THINKING');
     resetSpeechTranscript();
@@ -484,6 +486,8 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     resetCaptureBuffers();
 
     topicRef.current = topic;
+    targetBandRef.current = targetBand;
+    ieltsPartRef.current = ieltsPart;
 
     try {
       connectSocket();

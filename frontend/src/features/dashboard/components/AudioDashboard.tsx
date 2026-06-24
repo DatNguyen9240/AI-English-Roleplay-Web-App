@@ -14,7 +14,7 @@ interface AudioDashboardProps {
   chatHistory: ChatMessage[];
   currentPlayingSentence?: string;
   highlightedWordIndex?: number;
-  startRecording: (topic?: string) => void;
+  startRecording: (topic?: string, targetBand?: string, ieltsPart?: string) => void;
   stopRecording: () => void;
   startMicManual: () => void;
   sendTextMessage: (text: string) => void;
@@ -60,6 +60,13 @@ export function AudioDashboard({
   const [showSettings, setShowSettings] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   
+  const [targetBand, setTargetBand] = useState('7.0');
+  const [ieltsPart, setIeltsPart] = useState('general');
+  const [activeIeltsPart, setActiveIeltsPart] = useState<string>('general');
+  const [part2Phase, setPart2Phase] = useState<'idle' | 'delivery' | 'prep' | 'speaking' | 'done'>('idle');
+  const [prepTimeLeft, setPrepTimeLeft] = useState(60);
+  const [speakingTimeLeft, setSpeakingTimeLeft] = useState(120);
+
   const isSessionActive = chatHistory.length > 0 || (status !== 'IDLE' && status !== 'ERROR');
   const isLlmResponding = status === 'THINKING' || status === 'PROCESSING';
 
@@ -72,8 +79,88 @@ export function AudioDashboard({
 
   const handleStartPractice = (e: React.FormEvent) => {
     e.preventDefault();
-    startRecording(topicInput.trim() || undefined);
+    setActiveIeltsPart(ieltsPart);
+    if (ieltsPart === 'part2') {
+      setPart2Phase('delivery');
+      setPrepTimeLeft(60);
+      setSpeakingTimeLeft(120);
+    } else {
+      setPart2Phase('idle');
+    }
+    startRecording(topicInput.trim() || undefined, targetBand, ieltsPart);
   };
+
+  const handleResetSession = () => {
+    setActiveIeltsPart('general');
+    setIeltsPart('general');
+    setPart2Phase('idle');
+    setPrepTimeLeft(60);
+    setSpeakingTimeLeft(120);
+    resetSession();
+  };
+
+  // Timer logic for IELTS Part 2 (Cue Card)
+  useEffect(() => {
+    if (activeIeltsPart === 'part2' && part2Phase === 'delivery') {
+      const hasAiMessage = chatHistory.some(m => m.sender === 'ai');
+      if (hasAiMessage && (status === 'IDLE' || status === 'LISTENING')) {
+        setPart2Phase('prep');
+        setPrepTimeLeft(60);
+      }
+    }
+  }, [status, chatHistory, activeIeltsPart, part2Phase]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    if (activeIeltsPart === 'part2' && part2Phase === 'prep') {
+      timer = setInterval(() => {
+        setPrepTimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer!);
+            setPart2Phase('speaking');
+            setSpeakingTimeLeft(120);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [activeIeltsPart, part2Phase]);
+
+  useEffect(() => {
+    if (activeIeltsPart === 'part2' && part2Phase === 'speaking') {
+      startMicManual();
+    }
+  }, [activeIeltsPart, part2Phase, startMicManual]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    if (activeIeltsPart === 'part2' && part2Phase === 'speaking') {
+      timer = setInterval(() => {
+        setSpeakingTimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer!);
+            stopRecording();
+            setPart2Phase('done');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [activeIeltsPart, part2Phase, stopRecording]);
+
+  useEffect(() => {
+    if (activeIeltsPart === 'part2' && part2Phase === 'speaking' && !isRecording && (status === 'PROCESSING' || status === 'THINKING')) {
+      setPart2Phase('done');
+    }
+  }, [isRecording, status, activeIeltsPart, part2Phase]);
 
   const handleSendText = (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,9 +185,16 @@ export function AudioDashboard({
         <div className="flex items-center gap-3">
           <span className="font-bold tracking-tight text-white text-lg whitespace-nowrap">AI Tutor</span>
           {isSessionActive && (
-            <span className="hidden sm:inline-block text-[10px] bg-neutral-900 text-neutral-400 border border-neutral-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono whitespace-nowrap">
-              Active Session
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] bg-neutral-900 text-neutral-400 border border-neutral-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono whitespace-nowrap">
+                {activeIeltsPart === 'general' ? 'General Chat' : `IELTS Part ${activeIeltsPart.replace('part', '')}`}
+              </span>
+              {activeIeltsPart !== 'general' && (
+                <span className="text-[10px] bg-neutral-900/50 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono whitespace-nowrap">
+                  Target Band {targetBand}
+                </span>
+              )}
+            </div>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -119,7 +213,7 @@ export function AudioDashboard({
           {isSessionActive && (
             <Button
               type="button"
-              onClick={resetSession}
+              onClick={handleResetSession}
               variant="outline"
               size="sm"
               title="Reset practice topic"
@@ -223,18 +317,52 @@ export function AudioDashboard({
             <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-white mb-2 whitespace-nowrap">
               <BlurText text="Practice Speaking English" delay={45} animateBy="words" />
             </h1>
-            <p className="text-sm text-neutral-400 mb-8">
-              Type a custom scenario to practice roleplaying, or leave it blank to start a general chat.
+            <p className="text-xs sm:text-sm text-neutral-400 mb-8">
+              Select your practice mode and target band score, then enter an optional topic or leave it blank to start.
             </p>
             
             <form onSubmit={handleStartPractice} className="w-full space-y-4">
-              <Input
-                type="text"
-                value={topicInput}
-                onChange={(e) => setTopicInput(e.target.value)}
-                placeholder="e.g. Job interview at a tech company"
-                className="w-full h-11 px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-lg text-white placeholder-neutral-600 focus-visible:border-neutral-500 focus-visible:ring-1 focus-visible:ring-neutral-500 transition-all text-sm"
-              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full text-left">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider font-bold">IELTS Mode</label>
+                  <select
+                    value={ieltsPart}
+                    onChange={(e) => setIeltsPart(e.target.value)}
+                    className="w-full h-11 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-white text-xs sm:text-sm focus:outline-none focus:border-neutral-500 cursor-pointer"
+                  >
+                    <option value="general">General Practice (No Exam)</option>
+                    <option value="part1">IELTS Speaking Part 1</option>
+                    <option value="part2">IELTS Speaking Part 2 (Cue Card)</option>
+                    <option value="part3">IELTS Speaking Part 3 (Discussion)</option>
+                  </select>
+                </div>
+                
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider font-bold">Target Band Score</label>
+                  <select
+                    value={targetBand}
+                    onChange={(e) => setTargetBand(e.target.value)}
+                    className="w-full h-11 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-white text-xs sm:text-sm focus:outline-none focus:border-neutral-500 cursor-pointer"
+                  >
+                    <option value="5.0">Band 5.0 (Moderate)</option>
+                    <option value="6.0">Band 6.0 (Competent)</option>
+                    <option value="7.0">Band 7.0 (Good)</option>
+                    <option value="8.0">Band 8.0+ (Expert)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5 text-left">
+                <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider font-bold">Practice Topic / Scenario (Optional)</label>
+                <Input
+                  type="text"
+                  value={topicInput}
+                  onChange={(e) => setTopicInput(e.target.value)}
+                  placeholder={ieltsPart === 'general' ? "e.g. Job interview at a tech company" : "Leave blank for examiner's choice, or enter custom topic"}
+                  className="w-full h-11 px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-lg text-white placeholder-neutral-600 focus-visible:border-neutral-500 focus-visible:ring-1 focus-visible:ring-neutral-500 transition-all text-xs sm:text-sm"
+                />
+              </div>
+
               <Button
                 type="submit"
                 className="w-full h-11 rounded-lg font-bold bg-white hover:bg-neutral-200 text-black transition-colors duration-200 text-sm flex items-center justify-center gap-2 shadow"
@@ -247,6 +375,35 @@ export function AudioDashboard({
           /* Active Chat Workspace */
           <div className="flex-1 flex flex-col min-h-0 bg-neutral-950 border-y sm:border border-neutral-900 sm:rounded-xl overflow-hidden shadow-inner">
             
+            {/* IELTS Part 2 (Cue Card) countdown timer visualizer */}
+            {activeIeltsPart === 'part2' && part2Phase !== 'idle' && part2Phase !== 'done' && (
+              <div className="bg-neutral-900 border-b border-neutral-800 p-4 flex items-center justify-between text-left animate-fade-in">
+                <div className="flex items-center gap-3">
+                  <div className={`w-2.5 h-2.5 rounded-full ${part2Phase === 'prep' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500 animate-pulse-neutral'}`} />
+                  <div>
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                      {part2Phase === 'delivery' && 'Step 1: Examiner Delivering Cue Card'}
+                      {part2Phase === 'prep' && 'Step 2: Preparation Time (1 Minute)'}
+                      {part2Phase === 'speaking' && 'Step 3: Speaking Time (1-2 Minutes)'}
+                    </h3>
+                    <p className="text-[11px] text-neutral-400 mt-0.5">
+                      {part2Phase === 'delivery' && 'Please listen to the prompt and instructions...'}
+                      {part2Phase === 'prep' && 'Take notes. The microphone will open automatically.'}
+                      {part2Phase === 'speaking' && 'Speak continuously. Click the microphone button when done.'}
+                    </p>
+                  </div>
+                </div>
+                
+                {(part2Phase === 'prep' || part2Phase === 'speaking') && (
+                  <div className="bg-neutral-950 px-3.5 py-2 border border-neutral-800 rounded-lg text-right min-w-[80px]">
+                    <div className="text-[10px] text-neutral-500 uppercase tracking-wider font-mono">Time Left</div>
+                    <div className={`text-lg font-bold font-mono ${part2Phase === 'prep' ? 'text-amber-500' : 'text-rose-500'}`}>
+                      {part2Phase === 'prep' ? prepTimeLeft : speakingTimeLeft}s
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {/* Scrollable messages log */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {chatHistory.map((message) => {
@@ -396,8 +553,8 @@ export function AudioDashboard({
                 type="text"
                 value={textInput}
                 onChange={(e) => setTextInput(e.target.value)}
-                disabled={isLlmResponding}
-                placeholder={isLlmResponding ? "Tutor is writing..." : "Type your reply..."}
+                disabled={isLlmResponding || part2Phase === 'prep'}
+                placeholder={part2Phase === 'prep' ? "Preparing..." : isLlmResponding ? "Tutor is writing..." : "Type your reply..."}
                 className="flex-1 h-10 px-4 py-2.5 bg-neutral-900 border border-neutral-800 rounded-lg text-white placeholder-neutral-600 focus-visible:border-neutral-500 focus-visible:ring-1 focus-visible:ring-neutral-500 transition-all text-sm disabled:opacity-55"
               />
               <Button
@@ -413,14 +570,14 @@ export function AudioDashboard({
             <Button
               type="button"
               onClick={handleMicClick}
-              disabled={status === 'PROCESSING' || status === 'THINKING'}
+              disabled={status === 'PROCESSING' || status === 'THINKING' || part2Phase === 'prep'}
               size="icon"
               className={`h-10 w-10 rounded-full border transition-all duration-300 ${
                 isRecording
                   ? 'bg-white border-white text-black animate-pulse-neutral'
                   : 'bg-neutral-900 border-neutral-800 text-white hover:border-neutral-600 hover:bg-neutral-850'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={isRecording ? "Stop Recording" : "Start Voice Input"}
+              title={part2Phase === 'prep' ? "Mic locked during prep" : isRecording ? "Stop Recording" : "Start Voice Input"}
             >
               <Mic className="w-4 h-4" />
             </Button>

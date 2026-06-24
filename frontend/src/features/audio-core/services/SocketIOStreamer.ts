@@ -92,9 +92,9 @@ export class SocketIOStreamer {
   }
 
   /** Emits a custom topic to start a topic-specific roleplay */
-  sendTopic(topic: string): void {
+  sendTopic(topic: string, targetBand?: string, ieltsPart?: string): void {
     if (this.socket?.connected) {
-      this.socket.emit(SOCKET_EVENTS.SET_TOPIC, { topic });
+      this.socket.emit(SOCKET_EVENTS.SET_TOPIC, { topic, targetBand, ieltsPart });
     }
   }
 
