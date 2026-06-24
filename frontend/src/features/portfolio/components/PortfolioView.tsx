@@ -19,8 +19,7 @@ export function PortfolioView({ activeTab, setActiveTab }: PortfolioViewProps): 
   const skillsRow2 = ['Socket.io', 'PostgreSQL', 'Prisma ORM', 'Docker', 'AI Prompt Engineering', 'Web Audio API'];
 
   return (
-    <div className="relative w-full min-h-screen font-sans text-neutral-200 overflow-x-hidden">
-
+    <div className="relative z-10 w-full max-w-4xl mx-auto flex flex-col min-h-screen px-4 sm:px-6 md:px-8 py-0 sm:py-4 font-sans text-neutral-200">
       {/* Background Animating Grid */}
       <div className="fixed inset-0 z-0 pointer-events-none opacity-[0.35]">
         <Squares
@@ -32,8 +31,6 @@ export function PortfolioView({ activeTab, setActiveTab }: PortfolioViewProps): 
           className="w-full h-full"
         />
       </div>
-
-      <div className="relative z-10 w-full max-w-4xl mx-auto flex flex-col min-h-screen px-4 sm:px-6 md:px-8 py-0 sm:py-4">
 
         {/* 1. Header Area */}
         <header className="flex justify-between items-center py-4 border-b border-neutral-800 shrink-0 gap-4 mb-8">
@@ -211,6 +208,5 @@ export function PortfolioView({ activeTab, setActiveTab }: PortfolioViewProps): 
 
         </div>
       </div>
-    </div>
   );
 }
