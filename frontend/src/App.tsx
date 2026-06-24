@@ -40,24 +40,12 @@ function App(): React.ReactElement {
         status={status}
         rmsVolume={rmsVolume}
         transcript={transcript}
-        llmText={llmText}
         chatHistory={chatHistory}
         currentPlayingSentence={currentPlayingSentence}
-        highlightedWordIndex={highlightedWordIndex}
         startRecording={startRecording}
         stopRecording={stopRecording}
         sendTextMessage={sendTextMessage}
-        useBrowserTts={useBrowserTts}
-        toggleBrowserTts={toggleBrowserTts}
-        useBrowserStt={useBrowserStt}
-        toggleBrowserStt={toggleBrowserStt}
-        startMicManual={startMicManual}
         resetSession={resetSession}
-        ttsVoiceName={ttsVoiceName}
-        changeTtsVoiceName={changeTtsVoiceName}
-        ttsRate={ttsRate}
-        changeTtsRate={changeTtsRate}
-        availableVoices={availableVoices}
         suggestions={suggestions}
       />
     </PageShell>

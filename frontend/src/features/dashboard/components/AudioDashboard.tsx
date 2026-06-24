@@ -11,24 +11,12 @@ interface AudioDashboardProps {
   status: RecordingStatus;
   rmsVolume: number;
   transcript: string;
-  llmText: string;
   chatHistory: ChatMessage[];
   currentPlayingSentence?: string;
-  highlightedWordIndex?: number;
   startRecording: (topic?: string) => void;
   stopRecording: () => void;
   sendTextMessage: (text: string) => void;
-  useBrowserTts: boolean;
-  toggleBrowserTts: (val: boolean) => void;
-  useBrowserStt: boolean;
-  toggleBrowserStt: (val: boolean) => void;
-  startMicManual: () => void;
   resetSession: () => void;
-  ttsVoiceName: string | null;
-  changeTtsVoiceName: (val: string | null) => void;
-  ttsRate: number;
-  changeTtsRate: (val: number) => void;
-  availableVoices: SpeechSynthesisVoice[];
   suggestions: string[];
 }
 
