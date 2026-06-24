@@ -22,6 +22,7 @@ interface AudioDashboardProps {
   resetSession: () => void;
   suggestions: string[];
   speakText: (text: string) => void;
+  currentlySpeakingText?: string | null;
   ttsVoiceName: string | null;
   changeTtsVoiceName: (val: string | null) => void;
   ttsRate: number;
@@ -51,6 +52,7 @@ export function AudioDashboard({
   resetSession,
   suggestions,
   speakText,
+  currentlySpeakingText = null,
   ttsVoiceName,
   changeTtsVoiceName,
   ttsRate,
@@ -559,8 +561,12 @@ export function AudioDashboard({
                         <button
                           type="button"
                           onClick={() => speakText(message.text)}
-                          className="absolute right-2.5 bottom-2.5 text-neutral-500 hover:text-white transition-colors duration-150 p-1 rounded-md bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40 cursor-pointer"
-                          title="Speak this message"
+                          className={`absolute right-2.5 bottom-2.5 transition-colors duration-150 p-1 rounded-md border cursor-pointer ${
+                            currentlySpeakingText === message.text
+                              ? 'text-red-500 bg-red-950/40 hover:bg-red-900 border-red-800'
+                              : 'text-neutral-500 hover:text-white bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40'
+                          }`}
+                          title={currentlySpeakingText === message.text ? "Stop speaking" : "Speak this message"}
                         >
                           <Volume2 className="w-3.5 h-3.5" />
                         </button>
@@ -646,8 +652,12 @@ export function AudioDashboard({
                           e.stopPropagation();
                           speakText(suggestion);
                         }}
-                        className="absolute right-2.5 bottom-2.5 text-neutral-500 hover:text-white transition-colors duration-150 p-1 rounded-md bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40 cursor-pointer"
-                        title="Speak this suggestion"
+                        className={`absolute right-2.5 bottom-2.5 transition-colors duration-150 p-1 rounded-md border cursor-pointer ${
+                          currentlySpeakingText === suggestion
+                            ? 'text-red-500 bg-red-950/40 hover:bg-red-900 border-red-800'
+                            : 'text-neutral-500 hover:text-white bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40'
+                        }`}
+                        title={currentlySpeakingText === suggestion ? "Stop speaking" : "Speak this suggestion"}
                       >
                         <Volume2 className="w-3.5 h-3.5" />
                       </button>

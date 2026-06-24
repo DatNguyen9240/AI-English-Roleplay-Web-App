@@ -42,6 +42,7 @@ export interface UseAudioRecorderReturn {
   availableVoices: SpeechSynthesisVoice[];
   suggestions: string[];
   speakText: (text: string) => void;
+  currentlySpeakingText: string | null;
 }
 
 /**
@@ -56,6 +57,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [currentPlayingSentence, setCurrentPlayingSentence] = useState('');
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [currentlySpeakingText, setCurrentlySpeakingText] = useState<string | null>(null);
 
   // Settings & Preferences stored in LocalStorage
   const [useBrowserTts, setUseBrowserTts] = useState<boolean>(() => {
@@ -208,6 +210,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     updateStatus('THINKING');
 
     robustSpeechCancel();
+    setCurrentlySpeakingText(null);
 
     setChatHistory((prev) => [
       ...prev,
@@ -381,6 +384,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     logger.log('[useAudioRecorder] Manually interrupting AI speech (mic closed)');
     playoutQueueRef.current?.stop();
     robustSpeechCancel();
+    setCurrentlySpeakingText(null);
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
 
@@ -407,6 +411,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     logger.log('[useAudioRecorder] Sending user text message:', text);
     
     robustSpeechCancel();
+    setCurrentlySpeakingText(null);
     
     resetCaptureBuffers();
     sendTextInput(text);
@@ -581,6 +586,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     }
     playoutQueueRef.current?.stop();
     playoutQueueRef.current = null;
+    setCurrentlySpeakingText(null);
   }, [stopAudio, sendSpeechEndSignal, disconnectSocket]);
 
   useEffect(() => {
@@ -588,6 +594,13 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   }, [forceCleanup]);
 
   const speakText = useCallback((text: string): void => {
+    if (currentlySpeakingText === text) {
+      robustSpeechCancel();
+      setCurrentlySpeakingText(null);
+      updateStatus('IDLE');
+      return;
+    }
+
     const cleanText = text.replace(/<suggestions>[\s\S]*?<\/suggestions>/g, '').trim();
     if (!cleanText) return;
 
@@ -616,16 +629,20 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       utterance.rate = ttsRate;
 
       updateStatus('SPEAKING');
+      setCurrentlySpeakingText(text);
+
       utterance.onend = () => {
+        setCurrentlySpeakingText(null);
         updateStatus('IDLE');
       };
       utterance.onerror = () => {
+        setCurrentlySpeakingText(null);
         updateStatus('IDLE');
       };
 
       window.speechSynthesis.speak(utterance);
     }
-  }, [ttsVoiceName, ttsRate, updateStatus]);
+  }, [ttsVoiceName, ttsRate, updateStatus, currentlySpeakingText]);
 
   const resetSession = useCallback((): void => {
     forceCleanup();
@@ -636,6 +653,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
     setSuggestions([]);
+    setCurrentlySpeakingText(null);
   }, [forceCleanup, resetSpeechTranscript, updateStatus]);
 
   return {
@@ -664,5 +682,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     availableVoices,
     suggestions,
     speakText,
+    currentlySpeakingText,
   };
 }
