@@ -220,8 +220,8 @@ export function AudioDashboard({
         {!isSessionActive ? (
           /* Start Screen (Minimalist Topic Selector) */
           <div className="flex-1 flex flex-col justify-center items-center max-w-xl mx-auto w-full px-4 sm:px-0 text-center animate-fade-in">
-            <h1 className="text-2xl font-bold tracking-tight text-white mb-2">
-              <BlurText text="Practice Speaking English" delay={45} />
+            <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-white mb-2 whitespace-nowrap">
+              <BlurText text="Practice Speaking English" delay={45} animateBy="words" />
             </h1>
             <p className="text-sm text-neutral-400 mb-8">
               Type a custom scenario to practice roleplaying, or leave it blank to start a general chat.
