@@ -28,7 +28,7 @@ function App(): React.ReactElement {
     changeTtsRate,
     availableVoices,
     suggestions,
-    replayLastQuestion,
+    speakText,
   } = useAudioRecorder(config.apiUrl);
 
   const isSessionActive = chatHistory.length > 0 || (status !== 'IDLE' && status !== 'ERROR');
@@ -49,7 +49,7 @@ function App(): React.ReactElement {
         sendTextMessage={sendTextMessage}
         resetSession={resetSession}
         suggestions={suggestions}
-        replayLastQuestion={replayLastQuestion}
+        speakText={speakText}
         ttsVoiceName={ttsVoiceName}
         changeTtsVoiceName={changeTtsVoiceName}
         ttsRate={ttsRate}

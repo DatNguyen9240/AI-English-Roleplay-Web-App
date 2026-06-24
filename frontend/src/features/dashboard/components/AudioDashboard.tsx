@@ -20,7 +20,7 @@ interface AudioDashboardProps {
   sendTextMessage: (text: string) => void;
   resetSession: () => void;
   suggestions: string[];
-  replayLastQuestion: () => void;
+  speakText: (text: string) => void;
   ttsVoiceName: string | null;
   changeTtsVoiceName: (val: string | null) => void;
   ttsRate: number;
@@ -46,7 +46,7 @@ export function AudioDashboard({
   sendTextMessage,
   resetSession,
   suggestions,
-  replayLastQuestion,
+  speakText,
   ttsVoiceName,
   changeTtsVoiceName,
   ttsRate,
@@ -231,31 +231,17 @@ export function AudioDashboard({
             <Settings className="w-4 h-4" />
           </Button>
           {isSessionActive && (
-            <>
-              <Button
-                type="button"
-                onClick={replayLastQuestion}
-                variant="outline"
-                size="sm"
-                title="Speak the latest tutor question again"
-                className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition-colors duration-200"
-              >
-                <Volume2 className="w-3.5 h-3.5" />
-                <span>Repeat Question</span>
-              </Button>
-              
-              <Button
-                type="button"
-                onClick={handleResetSession}
-                variant="outline"
-                size="sm"
-                title="Reset practice topic"
-                className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition-colors duration-200"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>New Topic</span>
-              </Button>
-            </>
+            <Button
+              type="button"
+              onClick={handleResetSession}
+              variant="outline"
+              size="sm"
+              title="Reset practice topic"
+              className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition-colors duration-200"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>New Topic</span>
+            </Button>
           )}
         </div>
       </header>
@@ -477,10 +463,10 @@ export function AudioDashboard({
                       {isUser ? 'You' : 'Tutor'}
                     </div>
                     <div
-                      className={`px-4 py-2.5 rounded-xl text-sm leading-relaxed ${
+                      className={`relative group px-4 py-2.5 rounded-xl text-sm leading-relaxed ${
                         isUser
                           ? 'bg-neutral-800 text-white'
-                          : 'bg-neutral-900/40 border border-neutral-800 text-neutral-200'
+                          : 'bg-neutral-900/40 border border-neutral-800 text-neutral-200 pr-10'
                       }`}
                     >
                       {/* Real-time word-by-word lyrics highlight for AI messages */}
@@ -523,6 +509,18 @@ export function AudioDashboard({
                         })()
                       ) : (
                         message.text
+                      )}
+                      
+                      {/* Speaker Replay Button */}
+                      {!isUser && (
+                        <button
+                          type="button"
+                          onClick={() => speakText(message.text)}
+                          className="absolute right-2.5 bottom-2.5 text-neutral-500 hover:text-white transition-colors duration-150 p-1 rounded-md bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40 cursor-pointer"
+                          title="Speak this message"
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                        </button>
                       )}
                     </div>
                   </div>

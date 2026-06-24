@@ -40,7 +40,7 @@ export interface UseAudioRecorderReturn {
   changeTtsRate: (val: number) => void;
   availableVoices: SpeechSynthesisVoice[];
   suggestions: string[];
-  replayLastQuestion: () => void;
+  speakText: (text: string) => void;
 }
 
 /**
@@ -567,17 +567,11 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     return () => forceCleanup();
   }, [forceCleanup]);
 
-  const replayLastQuestion = useCallback((): void => {
-    const lastAiMsg = [...chatHistory].reverse().find((msg) => msg.sender === 'ai');
-    if (!lastAiMsg) {
-      logger.warn('[Replay] No AI message found to replay');
-      return;
-    }
-
-    const cleanText = lastAiMsg.text.replace(/<suggestions>[\s\S]*?<\/suggestions>/g, '').trim();
+  const speakText = useCallback((text: string): void => {
+    const cleanText = text.replace(/<suggestions>[\s\S]*?<\/suggestions>/g, '').trim();
     if (!cleanText) return;
 
-    logger.log('[Replay] Replaying last AI prompt:', cleanText);
+    logger.log('[Speech] Speaking text:', cleanText);
 
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
@@ -611,7 +605,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
 
       window.speechSynthesis.speak(utterance);
     }
-  }, [chatHistory, ttsVoiceName, ttsRate, updateStatus]);
+  }, [ttsVoiceName, ttsRate, updateStatus]);
 
   const resetSession = useCallback((): void => {
     forceCleanup();
@@ -648,6 +642,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     changeTtsRate,
     availableVoices,
     suggestions,
-    replayLastQuestion,
+    speakText,
   };
 }
