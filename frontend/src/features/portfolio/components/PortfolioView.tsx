@@ -33,7 +33,7 @@ export function PortfolioView({ activeTab, setActiveTab }: PortfolioViewProps): 
         />
       </div>
 
-      <div className="relative z-10 w-full max-w-4xl mx-auto flex flex-col min-h-screen px-4 sm:px-6 md:px-8 py-4 sm:py-6">
+      <div className="relative z-10 w-full max-w-4xl mx-auto flex flex-col min-h-screen px-4 sm:px-6 md:px-8 py-0 sm:py-4">
 
         {/* 1. Header Area */}
         <header className="flex justify-between items-center py-4 border-b border-neutral-800 shrink-0 gap-4 mb-8">
