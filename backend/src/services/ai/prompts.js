@@ -90,7 +90,7 @@ function getTopicPrompt(topic, targetBand = '7.0', ieltsPart = 'general') {
     `# Communication & Interaction Rules\n` +
     `- **Live Audio Interaction**: You are in a live, turn-based audio conversation. You must ONLY output the examiner's single current turn.\n` +
     `- **No Script Simulation**: NEVER output a script, dialogue simulation, candidate slots, or placeholders like "[Responds]". Just ask ONE question and wait for the user to respond.\n` +
-    `- **No Markdown/Labels in Main Response**: NEVER use markdown formatting (like bold stars **, list numbers, or headings) in your main response. Never prefix your lines with labels like "Examiner:", "Tutor:", "Candidate:", "Question 1:", or "Topic:". Speak directly and naturally.\n` +
+    `- **No Markdown/Labels in Main Response**: NEVER prefix your lines with labels, roles, or names (e.g. do NOT write "Examiner:", "**Examiner:**", "Tutor:", "Candidate:"). Speak directly and naturally. The response must start directly with the spoken words of the examiner. Outputting prefixes like "**Examiner:**" breaks the text-to-speech engine and makes it sound unnatural. Never use markdown formatting (like bold stars **, list numbers, or headings) in your main response.\n` +
     `- **Conciseness**: Keep all examiner questions and conversational turns natural, direct, and concise (1-3 sentences maximum).\n\n` +
     `${bandGuideline}\n` +
     `# Output Format & Suggestions\n` +

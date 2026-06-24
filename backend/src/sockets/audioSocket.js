@@ -133,15 +133,19 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       // TokenAggregator prepares sentence-level batches for TTS (Phase 5)
       const aggregator = new TokenAggregator(
         (sentence) => {
+          // Clean role prefixes like "**Examiner:**", "Examiner:", "**Tutor:**", etc.
+          const cleanSentence = sentence.replace(/^(?:\*\*(?:Examiner|Tutor|Candidate|Student|AI|User|Assistant):\*\*|[\w\s\-]+:)\s*/i, '').trim();
+          if (!cleanSentence) return;
+
           const currentSeq = sentenceSeq++;
           const ttsStart = Date.now();
           logger.info(
-            { sessionId: socket.id, requestId, seq: currentSeq, sentence },
+            { sessionId: socket.id, requestId, seq: currentSeq, sentence: cleanSentence },
             'TTS_STARTED'
           );
           const p = (async () => {
             try {
-              const { audio, sampleRate, words } = await ttsService.synthesize(sentence, requestId, signal);
+              const { audio, sampleRate, words } = await ttsService.synthesize(cleanSentence, requestId, signal);
               
               // Transition FSM to SPEAKING when the first synthesized chunk is ready
               if (session.fsm.state === STATES.THINKING) {
@@ -278,8 +282,10 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
         }
       }
 
-      // Add assistant turn to history (clean up suggestion block from history)
-      const cleanResponse = fullResponse.replace(/<suggestions>[\s\S]*?<\/suggestions>/g, '').trim();
+      // Add assistant turn to history (clean up suggestion block and any role prefixes from history)
+      let cleanResponse = fullResponse.replace(/<suggestions>[\s\S]*?<\/suggestions>/g, '').trim();
+      // Strip roleplay prefixes like "**Examiner:**", "Examiner:", etc. to prevent history pollution
+      cleanResponse = cleanResponse.replace(/^(?:\*\*(?:Examiner|Tutor|Candidate|Student|AI|User|Assistant):\*\*|[\w\s\-]+:)\s*/i, '').trim();
       if (cleanResponse && !signal.aborted) {
         session.conversationHistory.push({ role: 'assistant', content: cleanResponse });
       }
