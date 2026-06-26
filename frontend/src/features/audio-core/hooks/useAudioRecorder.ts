@@ -58,6 +58,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [currentlySpeakingText, setCurrentlySpeakingText] = useState<string | null>(null);
+  const activeSpeakIdRef = useRef<number>(0);
 
   // Settings & Preferences stored in LocalStorage
   const [useBrowserTts, setUseBrowserTts] = useState<boolean>(() => {
@@ -595,6 +596,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
 
   const speakText = useCallback((text: string): void => {
     if (currentlySpeakingText === text) {
+      activeSpeakIdRef.current += 1;
       robustSpeechCancel();
       setCurrentlySpeakingText(null);
       updateStatus('IDLE');
@@ -607,10 +609,10 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     logger.log('[Speech] Speaking text:', cleanText);
 
     if (typeof window !== 'undefined' && window.speechSynthesis) {
+      activeSpeakIdRef.current += 1;
+      const currentSpeakId = activeSpeakIdRef.current;
+
       robustSpeechCancel();
-      
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = 'en-US';
       
       const voices = window.speechSynthesis.getVoices();
       let englishVoice: SpeechSynthesisVoice | null = null;
@@ -623,24 +625,61 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
                        voices.find(v => v.lang.startsWith('en')) ||
                        voices.find(v => v.default) || null;
       }
-      if (englishVoice) {
-        utterance.voice = englishVoice;
-      }
-      utterance.rate = ttsRate;
+
+      // Fix Chrome bug by chunking text into sentences to prevent stuttering/looping
+      const sentences = cleanText.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [cleanText];
+      let currentSentenceIndex = 0;
 
       updateStatus('SPEAKING');
       setCurrentlySpeakingText(text);
 
-      utterance.onend = () => {
-        setCurrentlySpeakingText(null);
-        updateStatus('IDLE');
-      };
-      utterance.onerror = () => {
-        setCurrentlySpeakingText(null);
-        updateStatus('IDLE');
+      const playNextSentence = () => {
+        if (currentSpeakId !== activeSpeakIdRef.current) return;
+        
+        if (currentSentenceIndex >= sentences.length) {
+          setCurrentlySpeakingText(null);
+          updateStatus('IDLE');
+          return;
+        }
+
+        const chunkText = sentences[currentSentenceIndex].trim();
+        if (!chunkText) {
+          currentSentenceIndex++;
+          playNextSentence();
+          return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(chunkText);
+        utterance.lang = 'en-US';
+        if (englishVoice) {
+          utterance.voice = englishVoice;
+        }
+        utterance.rate = ttsRate;
+
+        utterance.onend = () => {
+          if (currentSpeakId === activeSpeakIdRef.current) {
+            currentSentenceIndex++;
+            playNextSentence();
+          }
+        };
+        
+        utterance.onerror = (e) => {
+          logger.error('[Speech] Error speaking chunk:', e);
+          if (currentSpeakId === activeSpeakIdRef.current) {
+            setCurrentlySpeakingText(null);
+            updateStatus('IDLE');
+          }
+        };
+
+        window.speechSynthesis.speak(utterance);
       };
 
-      window.speechSynthesis.speak(utterance);
+      // Add a slight delay after cancel to allow Chrome engine to reset properly
+      setTimeout(() => {
+        if (currentSpeakId === activeSpeakIdRef.current) {
+           playNextSentence();
+        }
+      }, 50);
     }
   }, [ttsVoiceName, ttsRate, updateStatus, currentlySpeakingText]);
 

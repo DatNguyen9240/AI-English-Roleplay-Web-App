@@ -226,29 +226,7 @@ export function AudioDashboard({
           )}
         </div>
 
-        {/* Navigation Switcher (Absolutely Centered) */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg text-xs flex z-20">
-          <button
-            onClick={() => setActiveTab('practice')}
-            className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${
-              activeTab === 'practice' 
-                ? 'bg-white text-black font-semibold' 
-                : 'text-neutral-400 hover:text-white'
-            }`}
-          >
-            Practice
-          </button>
-          <button
-            onClick={() => setActiveTab('about')}
-            className={`px-3 py-1.5 rounded-md transition-colors duration-200 cursor-pointer ${
-              activeTab === 'about' 
-                ? 'bg-white text-black font-semibold' 
-                : 'text-neutral-400 hover:text-white'
-            }`}
-          >
-            About Me
-          </button>
-        </div>
+
 
         <div className="flex items-center gap-2">
           <Button
