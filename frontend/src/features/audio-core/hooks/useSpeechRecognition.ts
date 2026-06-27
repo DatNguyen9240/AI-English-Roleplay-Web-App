@@ -51,22 +51,33 @@ export function useSpeechRecognition() {
       recognition.onresult = (event: any) => {
         if (sessionIdRef.current !== thisSession) return;
 
-        // Rebuild transcript from ALL results in this recognition instance (i = 0).
-        // Using event.resultIndex causes isFinal accumulation bugs on Chrome Android
-        // where resultIndex stays 0 but isFinal fires repeatedly with growing text.
-        let sessionFinal = '';
-        let interimTranscript = '';
+        let combined = '';
         for (let i = 0; i < event.results.length; i++) {
           const segment = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            sessionFinal += segment;
+          const trimmedSegment = segment.trim();
+          const trimmedCombined = combined.trim();
+
+          if (!trimmedCombined) {
+            combined = segment;
+          } else if (trimmedSegment.startsWith(trimmedCombined + ' ')) {
+            // Cumulative transcript: the new segment starts with the existing combined text plus a space.
+            // We overwrite the combined text with this segment to prevent duplicate words.
+            combined = segment;
+          } else if (trimmedSegment === trimmedCombined) {
+            // Duplicate event or identical text: do nothing / keep the current combined segment.
+            combined = segment;
           } else {
-            interimTranscript += segment;
+            // Separate segments: concatenate them.
+            if (combined.endsWith(' ') || segment.startsWith(' ')) {
+              combined += segment;
+            } else {
+              combined += ' ' + segment;
+            }
           }
         }
 
-        // Full transcript = text from previous auto-restarts + this instance's text
-        const text = finalTranscriptRef.current + sessionFinal + interimTranscript;
+        // Full transcript = text from previous auto-restarts + this instance's combined text
+        const text = finalTranscriptRef.current + combined;
         setTranscript(text);
         transcriptRef.current = text;
       };
