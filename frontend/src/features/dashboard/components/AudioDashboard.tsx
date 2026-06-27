@@ -129,7 +129,7 @@ function ChatBubble({
               key={idx}
               className={`${
                 isCurrent
-                  ? 'bg-white/15 text-white rounded-sm font-medium'
+                  ? 'bg-white/15 text-white rounded-sm'
                   : 'opacity-65'
               } transition-all duration-150`}
             >
