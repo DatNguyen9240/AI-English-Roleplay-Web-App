@@ -102,8 +102,10 @@ export function useSpeechRecognition() {
     // Invalidate the current session so no new auto-restart occurs
     sessionIdRef.current += 1;
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch (err) {
-        logger.warn('[BrowserSTT] Error stopping recognition:', err);
+      try { 
+        recognitionRef.current.abort(); 
+      } catch (err) {
+        logger.warn('[BrowserSTT] Error aborting recognition:', err);
       }
       recognitionRef.current = null;
     }
