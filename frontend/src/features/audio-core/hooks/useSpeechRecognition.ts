@@ -6,10 +6,14 @@ export function useSpeechRecognition() {
   const transcriptRef = useRef('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
+  // Accumulates only the FINALIZED (isFinal) segments across multiple onresult events.
+  // This is the canonical fix to prevent duplication on Chrome desktop and mobile.
+  const finalTranscriptRef = useRef('');
 
   const startSpeechRecognition = useCallback((onStartError: () => void) => {
     setTranscript('');
     transcriptRef.current = '';
+    finalTranscriptRef.current = '';
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -27,16 +31,21 @@ export function useSpeechRecognition() {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       recognition.onresult = (event: any) => {
+        // KEY FIX: Start from event.resultIndex, NOT 0.
+        // event.resultIndex points to the first NEW result in this event.
+        // Iterating from 0 causes re-processing old results → duplicated text.
         let interimTranscript = '';
-        let finalTranscript = '';
-        for (let i = 0; i < event.results.length; ++i) {
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const segment = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
+            // Append only genuinely new finalized text to our persistent accumulator.
+            finalTranscriptRef.current += segment;
           } else {
-            interimTranscript += event.results[i][0].transcript;
+            // Interim result: only shows the current in-progress spoken text.
+            interimTranscript += segment;
           }
         }
-        const text = finalTranscript + interimTranscript;
+        const text = finalTranscriptRef.current + interimTranscript;
         setTranscript(text);
         transcriptRef.current = text;
       };
@@ -73,6 +82,7 @@ export function useSpeechRecognition() {
   const resetSpeechTranscript = useCallback(() => {
     setTranscript('');
     transcriptRef.current = '';
+    finalTranscriptRef.current = '';
   }, []);
 
   return {
