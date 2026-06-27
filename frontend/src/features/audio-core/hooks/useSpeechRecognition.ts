@@ -6,28 +6,25 @@ export function useSpeechRecognition() {
   const transcriptRef = useRef('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
-  // Accumulates confirmed final segments across onresult events within one session.
+  // Carries over finalized text across internal auto-restarts (Chrome stops recognition
+  // after silence — we restart transparently so the user doesn't have to re-press).
   const finalTranscriptRef = useRef('');
-  // Incremented each time a new session starts to invalidate stale event callbacks
-  // from previous recognition instances that may still be firing.
+  // Incremented on EXPLICIT start/stop to invalidate all stale callbacks.
   const sessionIdRef = useRef(0);
 
   const startSpeechRecognition = useCallback((onStartError: () => void) => {
-    // ── Guard: Stop any existing recognition instance before starting a new one.
-    // Without this, old instances keep firing onresult and corrupt finalTranscriptRef.
+    // Stop any previous recognition instance to prevent zombie instances
+    // concurrently firing onresult and corrupting shared state.
     if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {
-        // ignore — it may have already stopped on its own
-      }
+      try { recognitionRef.current.stop(); } catch (e) { /* already stopped */ }
       recognitionRef.current = null;
     }
 
-    // Bump the session ID so any in-flight events from the old instance are ignored.
+    // Bump session — all callbacks captured with the old thisSession value are now no-ops.
     sessionIdRef.current += 1;
     const thisSession = sessionIdRef.current;
 
+    // Clean slate for this session
     setTranscript('');
     transcriptRef.current = '';
     finalTranscriptRef.current = '';
@@ -35,12 +32,16 @@ export function useSpeechRecognition() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      logger.error('Browser does not support SpeechRecognition');
+      logger.error('[BrowserSTT] Browser does not support SpeechRecognition');
       onStartError();
       return;
     }
 
-    try {
+    // Inner factory — creates, wires, and starts a recognition instance.
+    // Called once initially and again after each Chrome-initiated auto-stop.
+    const createAndStart = () => {
+      if (sessionIdRef.current !== thisSession) return; // session was explicitly stopped
+
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -48,24 +49,24 @@ export function useSpeechRecognition() {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       recognition.onresult = (event: any) => {
-        // Drop events from stale/old recognition instances.
         if (sessionIdRef.current !== thisSession) return;
 
-        // Loop from event.resultIndex (only NEW results, never re-process old ones).
-        // This is the canonical fix for duplicate text on all browsers.
+        // Rebuild transcript from ALL results in this recognition instance (i = 0).
+        // Using event.resultIndex causes isFinal accumulation bugs on Chrome Android
+        // where resultIndex stays 0 but isFinal fires repeatedly with growing text.
+        let sessionFinal = '';
         let interimTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
+        for (let i = 0; i < event.results.length; i++) {
           const segment = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            // Permanently confirmed text — add to accumulator.
-            finalTranscriptRef.current += segment;
+            sessionFinal += segment;
           } else {
-            // Interim text — display only, not stored permanently.
             interimTranscript += segment;
           }
         }
 
-        const text = finalTranscriptRef.current + interimTranscript;
+        // Full transcript = text from previous auto-restarts + this instance's text
+        const text = finalTranscriptRef.current + sessionFinal + interimTranscript;
         setTranscript(text);
         transcriptRef.current = text;
       };
@@ -73,29 +74,45 @@ export function useSpeechRecognition() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       recognition.onerror = (event: any) => {
         if (sessionIdRef.current !== thisSession) return;
-        logger.error('[BrowserSTT] Speech recognition error:', event.error || event);
+        const errType = event.error;
+        logger.error('[BrowserSTT] Recognition error:', errType);
+        // 'no-speech' and 'network' are recoverable — onend will fire and we'll restart.
+        // 'not-allowed' / 'service-not-allowed' are fatal — do not restart.
+        if (errType === 'not-allowed' || errType === 'service-not-allowed') {
+          sessionIdRef.current += 1; // invalidate to prevent restart
+          onStartError();
+        }
       };
 
       recognition.onend = () => {
         if (sessionIdRef.current !== thisSession) return;
-        logger.log('[BrowserSTT] Speech recognition ended');
+        // Chrome stopped recognition on its own (silence timeout, network blip, etc).
+        // Save current text as the "finalized" baseline before the new instance starts.
+        // This prevents text loss across restarts.
+        finalTranscriptRef.current = transcriptRef.current;
+        logger.log('[BrowserSTT] Recognition ended naturally — restarting in 100ms');
+        // Small delay to let Chrome's audio subsystem reset before restarting.
+        setTimeout(createAndStart, 100);
       };
 
       recognitionRef.current = recognition;
-      recognition.start();
-    } catch (err) {
-      logger.error('[BrowserSTT] Failed to start SpeechRecognition:', err);
-      onStartError();
-    }
+      try {
+        recognition.start();
+        logger.log('[BrowserSTT] Recognition started');
+      } catch (err) {
+        logger.error('[BrowserSTT] Failed to start:', err);
+        onStartError();
+      }
+    };
+
+    createAndStart();
   }, []);
 
   const stopSpeechRecognition = useCallback((): string => {
-    // Invalidate the current session first so any queued browser events are ignored.
+    // Bump session FIRST — this prevents any pending setTimeout(createAndStart) from firing.
     sessionIdRef.current += 1;
     if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (err) {
+      try { recognitionRef.current.stop(); } catch (err) {
         logger.warn('[BrowserSTT] Error stopping recognition:', err);
       }
       recognitionRef.current = null;
