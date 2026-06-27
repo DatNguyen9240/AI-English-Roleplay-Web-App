@@ -147,7 +147,7 @@ function ChatBubble({
     <div
       className={`flex flex-col max-w-[85%] ${
         isUser ? 'ml-auto items-end' : 'mr-auto items-start'
-      } animate-fade-in w-full`}
+      } animate-fade-in`}
     >
       <div className="text-[10px] text-neutral-500 mb-1 uppercase font-mono tracking-wider">
         {isUser ? 'You' : 'Tutor'}
@@ -156,12 +156,12 @@ function ChatBubble({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className={`relative group rounded-xl text-sm overflow-hidden transition-all duration-200 select-none ${
+        className={`relative group rounded-xl text-sm overflow-hidden transition-all duration-200 select-none w-fit max-w-full ${
           isUser
             ? 'bg-neutral-800 text-white border border-transparent'
             : 'bg-neutral-900/40 border border-neutral-800 text-neutral-200'
         }`}
-        style={{ width: '100%', minWidth: '180px' }}
+        style={{ minWidth: '180px' }}
       >
         {/* Language Slide Toggle Pill */}
         <div className="absolute right-2 top-2 z-20 flex items-center gap-0.5 bg-black/45 backdrop-blur-md rounded-full p-0.5 border border-white/5 text-[9px] font-mono text-neutral-400 select-none">
