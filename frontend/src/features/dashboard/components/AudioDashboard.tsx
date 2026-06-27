@@ -319,85 +319,83 @@ function SuggestionBubble({
   };
 
   return (
-    <div
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      className="relative w-full group rounded-xl overflow-hidden border border-neutral-800 bg-neutral-900/30 transition-all duration-200 select-none"
-    >
-      {/* Language Slide Toggle Pill */}
-      <div className="absolute right-2 top-2 z-20 flex items-center gap-0.5 bg-black/45 backdrop-blur-md rounded-full p-0.5 border border-white/5 text-[9px] font-mono text-neutral-400 select-none">
-        <button
-          type="button"
-          onClick={() => toggleSlide(0)}
-          className={`px-1.5 py-0.5 rounded-full transition-colors font-bold cursor-pointer ${
-            slide === 0 ? 'bg-neutral-700 text-white' : 'hover:text-neutral-200'
-          }`}
+    <div className="flex flex-col w-full items-center gap-1">
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="relative w-full group rounded-xl overflow-hidden border border-neutral-800 bg-neutral-900/30 transition-all duration-200 select-none"
+      >
+        {/* Sliding Wrapper */}
+        <div
+          className="flex transition-transform duration-300 ease-out"
+          style={{ transform: `translateX(-${slide * 100}%)` }}
         >
-          EN
-        </button>
-        <button
-          type="button"
-          onClick={() => toggleSlide(1)}
-          className={`px-1.5 py-0.5 rounded-full transition-colors font-bold cursor-pointer ${
-            slide === 1 ? 'bg-neutral-700 text-white' : 'hover:text-neutral-200'
-          }`}
-        >
-          VI
-        </button>
+          {/* Slide 0: English Suggestion (Clickable to send) */}
+          <div className="w-full shrink-0 relative min-h-[46px]">
+            <button
+              type="button"
+              onClick={() => sendTextMessage(suggestion)}
+              disabled={isLlmResponding}
+              className="w-full text-left text-xs sm:text-sm py-2.5 pl-3.5 pr-14 bg-transparent hover:bg-neutral-800/40 text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal cursor-pointer"
+            >
+              {suggestion}
+            </button>
+            
+            {/* Speaker Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                speakText(suggestion);
+              }}
+              className={`absolute right-2.5 bottom-2 transition-colors duration-155 p-1 rounded-md border cursor-pointer ${
+                currentlySpeakingText === suggestion
+                  ? 'text-red-500 bg-red-950/40 hover:bg-red-900 border-red-800'
+                  : 'text-neutral-500 hover:text-white bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40'
+              }`}
+              title={currentlySpeakingText === suggestion ? "Stop speaking" : "Speak this suggestion"}
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Slide 1: Vietnamese Translation (Also clickable to send) */}
+          <div className="w-full shrink-0 relative min-h-[46px] flex items-center bg-neutral-950/40">
+            <button
+              type="button"
+              onClick={() => sendTextMessage(suggestion)}
+              disabled={isLlmResponding}
+              className="w-full text-left text-xs sm:text-sm py-2.5 pl-3.5 pr-14 bg-transparent hover:bg-neutral-800/40 text-neutral-400 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal cursor-pointer italic"
+            >
+              {isLoading ? (
+                <span className="flex items-center gap-1.5 text-neutral-500 animate-pulse font-mono text-xs select-none">
+                  Dịch...
+                </span>
+              ) : (
+                translation || 'Đang tải bản dịch...'
+              )}
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Sliding Wrapper */}
-      <div
-        className="flex transition-transform duration-300 ease-out"
-        style={{ transform: `translateX(-${slide * 100}%)` }}
-      >
-        {/* Slide 0: English Suggestion (Clickable to send) */}
-        <div className="w-full shrink-0 relative min-h-[46px]">
-          <button
-            type="button"
-            onClick={() => sendTextMessage(suggestion)}
-            disabled={isLlmResponding}
-            className="w-full text-left text-xs sm:text-sm py-2.5 pl-3.5 pr-14 bg-transparent hover:bg-neutral-800/40 text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal cursor-pointer"
-          >
-            {suggestion}
-          </button>
-          
-          {/* Speaker Button */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              speakText(suggestion);
-            }}
-            className={`absolute right-2.5 bottom-2 transition-colors duration-155 p-1 rounded-md border cursor-pointer ${
-              currentlySpeakingText === suggestion
-                ? 'text-red-500 bg-red-950/40 hover:bg-red-900 border-red-800'
-                : 'text-neutral-500 hover:text-white bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40'
-            }`}
-            title={currentlySpeakingText === suggestion ? "Stop speaking" : "Speak this suggestion"}
-          >
-            <Volume2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Slide 1: Vietnamese Translation (Also clickable to send) */}
-        <div className="w-full shrink-0 relative min-h-[46px] flex items-center bg-neutral-950/40">
-          <button
-            type="button"
-            onClick={() => sendTextMessage(suggestion)}
-            disabled={isLlmResponding}
-            className="w-full text-left text-xs sm:text-sm py-2.5 pl-3.5 pr-14 bg-transparent hover:bg-neutral-800/40 text-neutral-400 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal cursor-pointer italic"
-          >
-            {isLoading ? (
-              <span className="flex items-center gap-1.5 text-neutral-500 animate-pulse font-mono text-xs select-none">
-                Dịch...
-              </span>
-            ) : (
-              translation || 'Đang tải bản dịch...'
-            )}
-          </button>
-        </div>
+      {/* Dots indicator for Suggestion Card */}
+      <div className="flex gap-1.5 select-none py-0.5">
+        <span
+          onClick={() => toggleSlide(0)}
+          className={`w-1.5 h-1.5 rounded-full cursor-pointer transition-all duration-150 ${
+            slide === 0 ? 'bg-neutral-400 w-3.5' : 'bg-neutral-800 hover:bg-neutral-650'
+          }`}
+          title="English Suggestion"
+        />
+        <span
+          onClick={() => toggleSlide(1)}
+          className={`w-1.5 h-1.5 rounded-full cursor-pointer transition-all duration-150 ${
+            slide === 1 ? 'bg-neutral-400 w-3.5' : 'bg-neutral-800 hover:bg-neutral-650'
+          }`}
+          title="Vietnamese Translation"
+        />
       </div>
     </div>
   );
