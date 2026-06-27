@@ -5,6 +5,7 @@ import { Mic, Send, RotateCcw, AlertCircle, Settings, Volume2, X } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BlurText } from '@/components/react-bits/BlurText';
+import { config } from '@/config';
 
 interface AudioDashboardProps {
   isRecording: boolean;
@@ -41,6 +42,7 @@ interface ChatBubbleProps {
   currentPlayingSentence?: string;
   speakText: (text: string) => void;
   currentlySpeakingText?: string | null;
+  onWordSelected: (word: string) => void;
 }
 
 function ChatBubble({
@@ -49,6 +51,7 @@ function ChatBubble({
   currentPlayingSentence,
   speakText,
   currentlySpeakingText,
+  onWordSelected,
 }: ChatBubbleProps) {
   const [slide, setSlide] = useState(0); // 0 = English, 1 = Vietnamese
   const [translation, setTranslation] = useState('');
@@ -143,6 +146,15 @@ function ChatBubble({
 
   const activeIndex = !isUser ? getActiveSentenceIndex() : -1;
 
+  const handleSelection = () => {
+    const selection = window.getSelection();
+    if (!selection) return;
+    const selectedText = selection.toString().trim();
+    if (selectedText.length >= 2 && selectedText.length <= 40 && !selectedText.includes('\n')) {
+      onWordSelected(selectedText);
+    }
+  };
+
   return (
     <div
       className={`flex flex-col max-w-[85%] ${
@@ -191,7 +203,11 @@ function ChatBubble({
           style={{ transform: `translateX(-${slide * 100}%)` }}
         >
           {/* Slide 0: English */}
-          <div className="w-full shrink-0 px-4 py-2.5 pr-14 leading-relaxed relative min-h-[46px]">
+          <div
+            onMouseUp={handleSelection}
+            onTouchEnd={handleSelection}
+            className="w-full shrink-0 px-4 py-2.5 pr-14 leading-relaxed relative min-h-[46px]"
+          >
             {isUser ? (
               message.text
             ) : (
@@ -216,7 +232,11 @@ function ChatBubble({
           </div>
 
           {/* Slide 1: Vietnamese Translation */}
-          <div className="w-full shrink-0 px-4 py-2.5 pr-14 leading-relaxed italic text-neutral-300 min-h-[46px] flex items-center">
+          <div
+            onMouseUp={handleSelection}
+            onTouchEnd={handleSelection}
+            className="w-full shrink-0 px-4 py-2.5 pr-14 leading-relaxed italic text-neutral-300 min-h-[46px] flex items-center"
+          >
             {isLoading ? (
               <div className="flex items-center gap-1.5 text-neutral-500 animate-pulse font-mono text-xs select-none">
                 <span>Dịch...</span>
@@ -416,6 +436,64 @@ export function AudioDashboard({
   const [topicInput, setTopicInput] = useState('');
   const [textInput, setTextInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+
+  // Dictionary lookup state
+  const [selectedWord, setSelectedWord] = useState<string | null>(null);
+  const [wordInfo, setWordInfo] = useState<any | null>(null);
+  const [isWordInfoLoading, setIsWordInfoLoading] = useState(false);
+  const [popupSlide, setPopupSlide] = useState(0);
+
+  const popupTouchStartX = useRef(0);
+  const popupTouchEndX = useRef(0);
+
+  const handlePopupTouchStart = (e: React.TouchEvent) => {
+    popupTouchStartX.current = e.targetTouches[0].clientX;
+    popupTouchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handlePopupTouchMove = (e: React.TouchEvent) => {
+    popupTouchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handlePopupTouchEnd = () => {
+    const diff = popupTouchStartX.current - popupTouchEndX.current;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) {
+        setPopupSlide(1);
+      } else {
+        setPopupSlide(0);
+      }
+    }
+  };
+
+  const fetchWordInfo = async (word: string) => {
+    setIsWordInfoLoading(true);
+    setWordInfo(null);
+    try {
+      const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "").trim();
+      const response = await fetch(`${config.apiUrl}/api/word-info?word=${encodeURIComponent(cleanWord)}`);
+      if (!response.ok) throw new Error('Failed to fetch word details');
+      const data = await response.json();
+      setWordInfo(data);
+    } catch (e) {
+      console.error(e);
+      setWordInfo({
+        word,
+        phonetic: '',
+        translation: 'Lỗi tải nghĩa.',
+        definition: 'Không thể tải chi tiết từ vựng lúc này. Vui lòng thử lại.',
+        examples: []
+      });
+    } finally {
+      setIsWordInfoLoading(false);
+    }
+  };
+
+  const handleWordSelected = (word: string) => {
+    setSelectedWord(word);
+    setPopupSlide(0);
+    fetchWordInfo(word);
+  };
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   
@@ -858,6 +936,7 @@ export function AudioDashboard({
                     currentPlayingSentence={currentPlayingSentence}
                     speakText={speakText}
                     currentlySpeakingText={currentlySpeakingText}
+                    onWordSelected={handleWordSelected}
                   />
                 );
               })}
@@ -1050,6 +1129,148 @@ export function AudioDashboard({
         </div>
       )}
 
+      {/* Word Lookup Modal */}
+      {selectedWord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div 
+            className="relative w-full max-w-md bg-neutral-900 border border-neutral-800 backdrop-blur-lg rounded-2xl shadow-2xl p-6 overflow-hidden flex flex-col min-h-[280px]"
+            onTouchStart={handlePopupTouchStart}
+            onTouchMove={handlePopupTouchMove}
+            onTouchEnd={handlePopupTouchEnd}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => {
+                setSelectedWord(null);
+                setWordInfo(null);
+                window.getSelection()?.removeAllRanges();
+              }}
+              className="absolute right-4 top-4 text-neutral-400 hover:text-white transition-colors duration-150 p-1.5 hover:bg-neutral-800 rounded-lg cursor-pointer z-10"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Loading State */}
+            {isWordInfoLoading && (
+              <div className="flex-1 flex flex-col items-center justify-center py-8">
+                <div className="w-8 h-8 border-2 border-neutral-600 border-t-white rounded-full animate-spin mb-3"></div>
+                <span className="text-xs text-neutral-400 font-mono">Đang phân tích từ vựng...</span>
+              </div>
+            )}
+
+            {/* Word Info Loaded */}
+            {!isWordInfoLoading && wordInfo && (
+              <div className="flex-1 flex flex-col justify-between">
+                
+                {/* Slide 0: General Info */}
+                {popupSlide === 0 && (
+                  <div className="flex-1 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-3 mb-1">
+                        <h3 className="text-xl font-bold text-white tracking-tight">{wordInfo.word}</h3>
+                        {wordInfo.phonetic && (
+                          <span className="text-xs font-mono text-neutral-400 px-2 py-0.5 bg-neutral-850 rounded border border-neutral-800">
+                            {wordInfo.phonetic}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => {
+                            const synth = window.speechSynthesis;
+                            if (synth) {
+                              synth.cancel();
+                              const utter = new SpeechSynthesisUtterance(wordInfo.word);
+                              utter.lang = 'en-US';
+                              utter.rate = 0.85;
+                              synth.speak(utter);
+                            }
+                          }}
+                          className="p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all duration-150 cursor-pointer"
+                          title="Speak word"
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      
+                      <div className="text-sm font-semibold text-emerald-400 mb-2 uppercase tracking-wide text-xs">
+                        {wordInfo.translation}
+                      </div>
+
+                      <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed font-sans mt-2 mb-4 bg-neutral-950/20 p-3 rounded-xl border border-neutral-800/45">
+                        {wordInfo.definition}
+                      </p>
+                    </div>
+
+                    <div className="text-[10px] text-neutral-500 font-mono text-center flex items-center justify-center gap-1.5 select-none mt-2">
+                      <span>Vuốt sang trái hoặc bấm</span>
+                      <button 
+                        onClick={() => setPopupSlide(1)}
+                        className="underline text-neutral-300 hover:text-white cursor-pointer font-bold"
+                      >
+                        Xem ví dụ & cách dùng
+                      </button>
+                      <span>→</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Slide 1: Usage Examples */}
+                {popupSlide === 1 && (
+                  <div className="flex-1 flex flex-col justify-between">
+                    <div>
+                      <h4 className="text-xs uppercase tracking-wider font-mono text-neutral-400 mb-3 font-bold">
+                        Cách dùng & Ví dụ thực tế
+                      </h4>
+                      
+                      <div className="space-y-3.5 overflow-y-auto max-h-[160px] pr-1.5">
+                        {wordInfo.examples && wordInfo.examples.map((ex: any, idx: number) => (
+                          <div key={idx} className="border-l-2 border-emerald-500/50 pl-3 py-0.5">
+                            <p className="text-xs sm:text-sm text-neutral-200 leading-relaxed font-sans">
+                              {ex.en}
+                            </p>
+                            <p className="text-xs text-neutral-400 italic mt-0.5 font-sans leading-relaxed">
+                              {ex.vi}
+                            </p>
+                          </div>
+                        ))}
+                        {(!wordInfo.examples || wordInfo.examples.length === 0) && (
+                          <p className="text-xs text-neutral-500 italic">Không tìm thấy ví dụ mẫu nào.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-[10px] text-neutral-500 font-mono text-center flex items-center justify-center gap-1.5 select-none mt-4">
+                      <span>← Vuốt sang phải hoặc bấm</span>
+                      <button 
+                        onClick={() => setPopupSlide(0)}
+                        className="underline text-neutral-300 hover:text-white cursor-pointer font-bold"
+                      >
+                        Quay lại
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Slide indicator dots */}
+                <div className="flex justify-center gap-1.5 mt-4">
+                  <span 
+                    onClick={() => setPopupSlide(0)}
+                    className={`w-1.5 h-1.5 rounded-full cursor-pointer transition-all duration-150 ${
+                      popupSlide === 0 ? 'bg-white w-3' : 'bg-neutral-600 hover:bg-neutral-400'
+                    }`}
+                  />
+                  <span 
+                    onClick={() => setPopupSlide(1)}
+                    className={`w-1.5 h-1.5 rounded-full cursor-pointer transition-all duration-150 ${
+                      popupSlide === 1 ? 'bg-white w-3' : 'bg-neutral-600 hover:bg-neutral-400'
+                    }`}
+                  />
+                </div>
+                
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
