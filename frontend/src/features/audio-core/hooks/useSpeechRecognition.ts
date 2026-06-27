@@ -6,11 +6,28 @@ export function useSpeechRecognition() {
   const transcriptRef = useRef('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
-  // Accumulates only the FINALIZED (isFinal) segments across multiple onresult events.
-  // This is the canonical fix to prevent duplication on Chrome desktop and mobile.
+  // Accumulates confirmed final segments across onresult events within one session.
   const finalTranscriptRef = useRef('');
+  // Incremented each time a new session starts to invalidate stale event callbacks
+  // from previous recognition instances that may still be firing.
+  const sessionIdRef = useRef(0);
 
   const startSpeechRecognition = useCallback((onStartError: () => void) => {
+    // ── Guard: Stop any existing recognition instance before starting a new one.
+    // Without this, old instances keep firing onresult and corrupt finalTranscriptRef.
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        // ignore — it may have already stopped on its own
+      }
+      recognitionRef.current = null;
+    }
+
+    // Bump the session ID so any in-flight events from the old instance are ignored.
+    sessionIdRef.current += 1;
+    const thisSession = sessionIdRef.current;
+
     setTranscript('');
     transcriptRef.current = '';
     finalTranscriptRef.current = '';
@@ -31,20 +48,23 @@ export function useSpeechRecognition() {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       recognition.onresult = (event: any) => {
-        // KEY FIX: Start from event.resultIndex, NOT 0.
-        // event.resultIndex points to the first NEW result in this event.
-        // Iterating from 0 causes re-processing old results → duplicated text.
+        // Drop events from stale/old recognition instances.
+        if (sessionIdRef.current !== thisSession) return;
+
+        // Loop from event.resultIndex (only NEW results, never re-process old ones).
+        // This is the canonical fix for duplicate text on all browsers.
         let interimTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const segment = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            // Append only genuinely new finalized text to our persistent accumulator.
+            // Permanently confirmed text — add to accumulator.
             finalTranscriptRef.current += segment;
           } else {
-            // Interim result: only shows the current in-progress spoken text.
+            // Interim text — display only, not stored permanently.
             interimTranscript += segment;
           }
         }
+
         const text = finalTranscriptRef.current + interimTranscript;
         setTranscript(text);
         transcriptRef.current = text;
@@ -52,10 +72,12 @@ export function useSpeechRecognition() {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       recognition.onerror = (event: any) => {
+        if (sessionIdRef.current !== thisSession) return;
         logger.error('[BrowserSTT] Speech recognition error:', event.error || event);
       };
 
       recognition.onend = () => {
+        if (sessionIdRef.current !== thisSession) return;
         logger.log('[BrowserSTT] Speech recognition ended');
       };
 
@@ -68,6 +90,8 @@ export function useSpeechRecognition() {
   }, []);
 
   const stopSpeechRecognition = useCallback((): string => {
+    // Invalidate the current session first so any queued browser events are ignored.
+    sessionIdRef.current += 1;
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
