@@ -157,7 +157,7 @@ function ChatBubble({
 
   return (
     <div
-      className={`flex flex-col max-w-[85%] ${
+      className={`flex flex-col max-w-[92%] ${
         isUser ? 'ml-auto items-end' : 'mr-auto items-start'
       } animate-fade-in`}
     >
@@ -173,30 +173,8 @@ function ChatBubble({
             ? 'bg-neutral-800 text-white border border-transparent'
             : 'bg-neutral-900/40 border border-neutral-800 text-neutral-200'
         }`}
-        style={{ minWidth: '180px' }}
+        style={{ minWidth: '80px' }}
       >
-        {/* Language Slide Toggle Pill */}
-        <div className="absolute right-2 top-2 z-20 flex items-center gap-0.5 bg-black/45 backdrop-blur-md rounded-full p-0.5 border border-white/5 text-[9px] font-mono text-neutral-400 select-none">
-          <button
-            type="button"
-            onClick={() => toggleSlide(0)}
-            className={`px-1.5 py-0.5 rounded-full transition-colors font-bold cursor-pointer ${
-              slide === 0 ? 'bg-neutral-700 text-white' : 'hover:text-neutral-200'
-            }`}
-          >
-            EN
-          </button>
-          <button
-            type="button"
-            onClick={() => toggleSlide(1)}
-            className={`px-1.5 py-0.5 rounded-full transition-colors font-bold cursor-pointer ${
-              slide === 1 ? 'bg-neutral-700 text-white' : 'hover:text-neutral-200'
-            }`}
-          >
-            VI
-          </button>
-        </div>
-
         {/* Sliding Wrapper */}
         <div
           className="flex transition-transform duration-300 ease-out"
@@ -249,6 +227,26 @@ function ChatBubble({
           </div>
         </div>
       </div>
+
+      {/* Minimalistic EN-VI slide dots */}
+      {!isUser && (
+        <div className="flex gap-1.5 mt-1.5 px-2 select-none">
+          <span
+            onClick={() => toggleSlide(0)}
+            className={`w-1.5 h-1.5 rounded-full cursor-pointer transition-all duration-150 ${
+              slide === 0 ? 'bg-neutral-400 w-3.5' : 'bg-neutral-800 hover:bg-neutral-650'
+            }`}
+            title="English"
+          />
+          <span
+            onClick={() => toggleSlide(1)}
+            className={`w-1.5 h-1.5 rounded-full cursor-pointer transition-all duration-150 ${
+              slide === 1 ? 'bg-neutral-400 w-3.5' : 'bg-neutral-800 hover:bg-neutral-650'
+            }`}
+            title="Vietnamese Translation"
+          />
+        </div>
+      )}
     </div>
   );
 }
