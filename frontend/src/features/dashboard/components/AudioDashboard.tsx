@@ -103,6 +103,46 @@ function ChatBubble({
     }
   };
 
+  const getActiveSentenceIndex = () => {
+    if (!currentPlayingSentence) return -1;
+    const englishSentences = message.text.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+/g) || [message.text];
+    const cleanCurrent = currentPlayingSentence.trim().toLowerCase();
+
+    return englishSentences.findIndex((s) => {
+      const cleanSentence = s.trim().toLowerCase();
+      return cleanSentence.includes(cleanCurrent) || cleanCurrent.includes(cleanSentence);
+    });
+  };
+
+  const renderHighlightedText = (text: string, activeIndex: number) => {
+    if (activeIndex === -1) return <span>{text}</span>;
+
+    // Split text into sentences using standard punctuation regex
+    const sentenceArray = text.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+/g) || [text];
+
+    return (
+      <span>
+        {sentenceArray.map((sentence, idx) => {
+          const isCurrent = idx === activeIndex;
+          return (
+            <span
+              key={idx}
+              className={`${
+                isCurrent
+                  ? 'bg-white/15 text-white rounded-sm px-0.5 font-medium'
+                  : 'opacity-65'
+              } transition-all duration-150`}
+            >
+              {sentence}
+            </span>
+          );
+        })}
+      </span>
+    );
+  };
+
+  const activeIndex = !isUser ? getActiveSentenceIndex() : -1;
+
   return (
     <div
       className={`flex flex-col max-w-[85%] ${
@@ -152,24 +192,10 @@ function ChatBubble({
         >
           {/* Slide 0: English */}
           <div className="w-full shrink-0 px-4 py-2.5 pr-14 leading-relaxed relative min-h-[46px]">
-            {!isUser && currentPlayingSentence && message.text.includes(currentPlayingSentence) ? (
-              (() => {
-                const startIndex = message.text.indexOf(currentPlayingSentence);
-                const beforeText = message.text.substring(0, startIndex);
-                const afterText = message.text.substring(startIndex + currentPlayingSentence.length);
-
-                return (
-                  <span>
-                    {beforeText && <span className="opacity-60">{beforeText}</span>}
-                    <span className="bg-white/15 text-white rounded-sm">
-                      {currentPlayingSentence}
-                    </span>
-                    {afterText && <span className="opacity-60">{afterText}</span>}
-                  </span>
-                );
-              })()
-            ) : (
+            {isUser ? (
               message.text
+            ) : (
+              renderHighlightedText(message.text, activeIndex)
             )}
 
             {/* Speaker Replay Button */}
@@ -195,8 +221,10 @@ function ChatBubble({
               <div className="flex items-center gap-1.5 text-neutral-500 animate-pulse font-mono text-xs select-none">
                 <span>Dịch...</span>
               </div>
+            ) : translation ? (
+              renderHighlightedText(translation, activeIndex)
             ) : (
-              translation || 'Đang tải bản dịch...'
+              'Đang tải bản dịch...'
             )}
           </div>
         </div>
