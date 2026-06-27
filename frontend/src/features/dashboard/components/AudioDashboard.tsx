@@ -453,7 +453,13 @@ export function AudioDashboard({
     } else {
       setPart2Phase('idle');
     }
-    startRecording(topicInput.trim() || undefined, targetBand, ieltsPart);
+
+    let finalTopic = topicInput.trim();
+    if (!finalTopic) {
+      finalTopic = ieltsPart === 'general' ? "Tutor's Choice" : "Examiner's Choice";
+    }
+
+    startRecording(finalTopic, targetBand, ieltsPart);
   };
 
   const handleResetSession = () => {
