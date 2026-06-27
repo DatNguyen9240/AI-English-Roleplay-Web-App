@@ -103,9 +103,9 @@ export function useSpeechRecognition() {
     sessionIdRef.current += 1;
     if (recognitionRef.current) {
       try { 
-        recognitionRef.current.abort(); 
+        recognitionRef.current.stop(); 
       } catch (err) {
-        logger.warn('[BrowserSTT] Error aborting recognition:', err);
+        logger.warn('[BrowserSTT] Error stopping recognition:', err);
       }
       recognitionRef.current = null;
     }

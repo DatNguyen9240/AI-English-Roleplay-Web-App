@@ -184,7 +184,7 @@ function ChatBubble({
           <div
             onMouseUp={handleSelection}
             onTouchEnd={handleSelection}
-            className="w-full shrink-0 px-4 py-2.5 pr-14 leading-relaxed relative min-h-[46px]"
+            className="w-full shrink-0 px-4 py-2.5 pr-14 leading-relaxed relative min-h-[46px] select-text"
           >
             {isUser ? (
               message.text
@@ -213,7 +213,7 @@ function ChatBubble({
           <div
             onMouseUp={handleSelection}
             onTouchEnd={handleSelection}
-            className="w-full shrink-0 px-4 py-2.5 pr-14 leading-relaxed italic text-neutral-300 min-h-[46px] flex items-center"
+            className="w-full shrink-0 px-4 py-2.5 pr-14 leading-relaxed italic text-neutral-300 min-h-[46px] flex items-center select-text"
           >
             {isLoading ? (
               <div className="flex items-center gap-1.5 text-neutral-500 animate-pulse font-mono text-xs select-none">
