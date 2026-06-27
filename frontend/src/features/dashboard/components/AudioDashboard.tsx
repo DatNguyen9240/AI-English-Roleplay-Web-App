@@ -35,6 +35,328 @@ interface AudioDashboardProps {
   setActiveTab: (tab: 'practice' | 'about') => void;
 }
 
+interface ChatBubbleProps {
+  message: ChatMessage;
+  isUser: boolean;
+  currentPlayingSentence?: string;
+  speakText: (text: string) => void;
+  currentlySpeakingText?: string | null;
+}
+
+function ChatBubble({
+  message,
+  isUser,
+  currentPlayingSentence,
+  speakText,
+  currentlySpeakingText,
+}: ChatBubbleProps) {
+  const [slide, setSlide] = useState(0); // 0 = English, 1 = Vietnamese
+  const [translation, setTranslation] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+
+  const fetchTranslation = async (text: string) => {
+    if (translation) return;
+    setIsLoading(true);
+    try {
+      const cleanText = text.replace(/<suggestions>[\s\S]*?<\/suggestions>/g, '').trim();
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(cleanText)}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Translation failed');
+      const data = await response.json();
+      const translatedText = data[0].map((x: any) => x[0]).join('');
+      setTranslation(translatedText);
+    } catch (e) {
+      console.error(e);
+      setTranslation('Dịch thất bại. Vui lòng thử lại.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleSlide = (targetSlide: number) => {
+    setSlide(targetSlide);
+    if (targetSlide === 1) {
+      fetchTranslation(message.text);
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diff = touchStartX.current - touchEndX.current;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) {
+        toggleSlide(1);
+      } else {
+        toggleSlide(0);
+      }
+    }
+  };
+
+  return (
+    <div
+      className={`flex flex-col max-w-[85%] ${
+        isUser ? 'ml-auto items-end' : 'mr-auto items-start'
+      } animate-fade-in w-full`}
+    >
+      <div className="text-[10px] text-neutral-500 mb-1 uppercase font-mono tracking-wider">
+        {isUser ? 'You' : 'Tutor'}
+      </div>
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className={`relative group rounded-xl text-sm overflow-hidden transition-all duration-200 select-none ${
+          isUser
+            ? 'bg-neutral-800 text-white border border-transparent'
+            : 'bg-neutral-900/40 border border-neutral-800 text-neutral-200'
+        }`}
+        style={{ width: '100%', minWidth: '180px' }}
+      >
+        {/* Language Slide Toggle Pill */}
+        <div className="absolute right-2 top-2 z-20 flex items-center gap-0.5 bg-black/45 backdrop-blur-md rounded-full p-0.5 border border-white/5 text-[9px] font-mono text-neutral-400 select-none">
+          <button
+            type="button"
+            onClick={() => toggleSlide(0)}
+            className={`px-1.5 py-0.5 rounded-full transition-colors font-bold cursor-pointer ${
+              slide === 0 ? 'bg-neutral-700 text-white' : 'hover:text-neutral-200'
+            }`}
+          >
+            EN
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleSlide(1)}
+            className={`px-1.5 py-0.5 rounded-full transition-colors font-bold cursor-pointer ${
+              slide === 1 ? 'bg-neutral-700 text-white' : 'hover:text-neutral-200'
+            }`}
+          >
+            VI
+          </button>
+        </div>
+
+        {/* Sliding Wrapper */}
+        <div
+          className="flex transition-transform duration-300 ease-out"
+          style={{ transform: `translateX(-${slide * 100}%)` }}
+        >
+          {/* Slide 0: English */}
+          <div className="w-full shrink-0 px-4 py-2.5 pr-14 leading-relaxed relative min-h-[46px]">
+            {!isUser && currentPlayingSentence && message.text.includes(currentPlayingSentence) ? (
+              (() => {
+                const startIndex = message.text.indexOf(currentPlayingSentence);
+                const beforeText = message.text.substring(0, startIndex);
+                const afterText = message.text.substring(startIndex + currentPlayingSentence.length);
+
+                return (
+                  <span>
+                    {beforeText && <span className="opacity-60">{beforeText}</span>}
+                    <span className="bg-white/15 text-white rounded-sm">
+                      {currentPlayingSentence}
+                    </span>
+                    {afterText && <span className="opacity-60">{afterText}</span>}
+                  </span>
+                );
+              })()
+            ) : (
+              message.text
+            )}
+
+            {/* Speaker Replay Button */}
+            {!isUser && (
+              <button
+                type="button"
+                onClick={() => speakText(message.text)}
+                className={`absolute right-2.5 bottom-2 transition-colors duration-155 p-1 rounded-md border cursor-pointer ${
+                  currentlySpeakingText === message.text
+                    ? 'text-red-500 bg-red-950/40 hover:bg-red-900 border-red-800'
+                    : 'text-neutral-500 hover:text-white bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40'
+                }`}
+                title={currentlySpeakingText === message.text ? "Stop speaking" : "Speak this message"}
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Slide 1: Vietnamese Translation */}
+          <div className="w-full shrink-0 px-4 py-2.5 pr-14 leading-relaxed italic text-neutral-300 min-h-[46px] flex items-center">
+            {isLoading ? (
+              <div className="flex items-center gap-1.5 text-neutral-500 animate-pulse font-mono text-xs select-none">
+                <span>Dịch...</span>
+              </div>
+            ) : (
+              translation || 'Đang tải bản dịch...'
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface SuggestionBubbleProps {
+  suggestion: string;
+  isLlmResponding: boolean;
+  sendTextMessage: (text: string) => void;
+  speakText: (text: string) => void;
+  currentlySpeakingText?: string | null;
+}
+
+function SuggestionBubble({
+  suggestion,
+  isLlmResponding,
+  sendTextMessage,
+  speakText,
+  currentlySpeakingText,
+}: SuggestionBubbleProps) {
+  const [slide, setSlide] = useState(0); // 0 = English, 1 = Vietnamese
+  const [translation, setTranslation] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+
+  const fetchTranslation = async (text: string) => {
+    if (translation) return;
+    setIsLoading(true);
+    try {
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(text)}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Translation failed');
+      const data = await response.json();
+      const translatedText = data[0].map((x: any) => x[0]).join('');
+      setTranslation(translatedText);
+    } catch (e) {
+      console.error(e);
+      setTranslation('Dịch thất bại. Vui lòng thử lại.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleSlide = (targetSlide: number) => {
+    setSlide(targetSlide);
+    if (targetSlide === 1) {
+      fetchTranslation(suggestion);
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diff = touchStartX.current - touchEndX.current;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) {
+        toggleSlide(1);
+      } else {
+        toggleSlide(0);
+      }
+    }
+  };
+
+  return (
+    <div
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      className="relative w-full group rounded-xl overflow-hidden border border-neutral-800 bg-neutral-900/30 transition-all duration-200 select-none"
+    >
+      {/* Language Slide Toggle Pill */}
+      <div className="absolute right-2 top-2 z-20 flex items-center gap-0.5 bg-black/45 backdrop-blur-md rounded-full p-0.5 border border-white/5 text-[9px] font-mono text-neutral-400 select-none">
+        <button
+          type="button"
+          onClick={() => toggleSlide(0)}
+          className={`px-1.5 py-0.5 rounded-full transition-colors font-bold cursor-pointer ${
+            slide === 0 ? 'bg-neutral-700 text-white' : 'hover:text-neutral-200'
+          }`}
+        >
+          EN
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleSlide(1)}
+          className={`px-1.5 py-0.5 rounded-full transition-colors font-bold cursor-pointer ${
+            slide === 1 ? 'bg-neutral-700 text-white' : 'hover:text-neutral-200'
+          }`}
+        >
+          VI
+        </button>
+      </div>
+
+      {/* Sliding Wrapper */}
+      <div
+        className="flex transition-transform duration-300 ease-out"
+        style={{ transform: `translateX(-${slide * 100}%)` }}
+      >
+        {/* Slide 0: English Suggestion (Clickable to send) */}
+        <div className="w-full shrink-0 relative min-h-[46px]">
+          <button
+            type="button"
+            onClick={() => sendTextMessage(suggestion)}
+            disabled={isLlmResponding}
+            className="w-full text-left text-xs sm:text-sm py-2.5 pl-3.5 pr-14 bg-transparent hover:bg-neutral-800/40 text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal cursor-pointer"
+          >
+            {suggestion}
+          </button>
+          
+          {/* Speaker Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              speakText(suggestion);
+            }}
+            className={`absolute right-2.5 bottom-2 transition-colors duration-155 p-1 rounded-md border cursor-pointer ${
+              currentlySpeakingText === suggestion
+                ? 'text-red-500 bg-red-950/40 hover:bg-red-900 border-red-800'
+                : 'text-neutral-500 hover:text-white bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40'
+            }`}
+            title={currentlySpeakingText === suggestion ? "Stop speaking" : "Speak this suggestion"}
+          >
+            <Volume2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Slide 1: Vietnamese Translation (Also clickable to send) */}
+        <div className="w-full shrink-0 relative min-h-[46px] flex items-center bg-neutral-950/40">
+          <button
+            type="button"
+            onClick={() => sendTextMessage(suggestion)}
+            disabled={isLlmResponding}
+            className="w-full text-left text-xs sm:text-sm py-2.5 pl-3.5 pr-14 bg-transparent hover:bg-neutral-800/40 text-neutral-400 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal cursor-pointer italic"
+          >
+            {isLoading ? (
+              <span className="flex items-center gap-1.5 text-neutral-500 animate-pulse font-mono text-xs select-none">
+                Dịch...
+              </span>
+            ) : (
+              translation || 'Đang tải bản dịch...'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AudioDashboard({
   isRecording,
   status,
@@ -495,60 +817,14 @@ export function AudioDashboard({
 
                 const isUser = message.sender === 'user';
                 return (
-                  <div
+                  <ChatBubble
                     key={message.id}
-                    className={`flex flex-col max-w-[85%] ${
-                      isUser ? 'ml-auto items-end' : 'mr-auto items-start'
-                    } animate-fade-in`}
-                  >
-                    <div className="text-[10px] text-neutral-500 mb-1 uppercase font-mono tracking-wider">
-                      {isUser ? 'You' : 'Tutor'}
-                    </div>
-                    <div
-                      className={`relative group px-4 py-2.5 rounded-xl text-sm leading-relaxed ${
-                        isUser
-                          ? 'bg-neutral-800 text-white'
-                          : 'bg-neutral-900/40 border border-neutral-800 text-neutral-200 pr-10'
-                      }`}
-                    >
-                      {/* Highlight the sentence being read by AI with sync-to-speech reveal */}
-                      {!isUser && currentPlayingSentence && message.text.includes(currentPlayingSentence) ? (
-                        (() => {
-                          const startIndex = message.text.indexOf(currentPlayingSentence);
-                          const beforeText = message.text.substring(0, startIndex);
-                          const afterText = message.text.substring(startIndex + currentPlayingSentence.length);
-
-                          return (
-                            <span>
-                              {beforeText && <span className="opacity-60">{beforeText}</span>}
-                              <span className="bg-white/15 text-white rounded-sm">
-                                {currentPlayingSentence}
-                              </span>
-                              {afterText && <span className="opacity-60">{afterText}</span>}
-                            </span>
-                          );
-                        })()
-                      ) : (
-                        message.text
-                      )}
-                      
-                      {/* Speaker Replay Button */}
-                      {!isUser && (
-                        <button
-                          type="button"
-                          onClick={() => speakText(message.text)}
-                          className={`absolute right-2.5 bottom-2.5 transition-colors duration-150 p-1 rounded-md border cursor-pointer ${
-                            currentlySpeakingText === message.text
-                              ? 'text-red-500 bg-red-950/40 hover:bg-red-900 border-red-800'
-                              : 'text-neutral-500 hover:text-white bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40'
-                          }`}
-                          title={currentlySpeakingText === message.text ? "Stop speaking" : "Speak this message"}
-                        >
-                          <Volume2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                    message={message}
+                    isUser={isUser}
+                    currentPlayingSentence={currentPlayingSentence}
+                    speakText={speakText}
+                    currentlySpeakingText={currentlySpeakingText}
+                  />
                 );
               })}
 
@@ -613,31 +889,14 @@ export function AudioDashboard({
               {showSuggestions && (
                 <div className="flex flex-col gap-2.5 max-h-48 overflow-y-auto p-0 bg-transparent border-none">
                   {suggestions.map((suggestion, idx) => (
-                    <div key={idx} className="relative w-full group">
-                      <button
-                        type="button"
-                        onClick={() => sendTextMessage(suggestion)}
-                        disabled={isLlmResponding}
-                        className="w-full text-left text-xs sm:text-sm py-2.5 pl-3.5 pr-10 bg-neutral-900/50 hover:bg-neutral-800/85 border border-neutral-800 rounded-xl text-neutral-300 hover:text-white transition-all duration-150 leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal cursor-pointer"
-                      >
-                        {suggestion}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          speakText(suggestion);
-                        }}
-                        className={`absolute right-2.5 bottom-2.5 transition-colors duration-150 p-1 rounded-md border cursor-pointer ${
-                          currentlySpeakingText === suggestion
-                            ? 'text-red-500 bg-red-950/40 hover:bg-red-900 border-red-800'
-                            : 'text-neutral-500 hover:text-white bg-neutral-950/40 hover:bg-neutral-900 border border-neutral-800/40'
-                        }`}
-                        title={currentlySpeakingText === suggestion ? "Stop speaking" : "Speak this suggestion"}
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <SuggestionBubble
+                      key={idx}
+                      suggestion={suggestion}
+                      isLlmResponding={isLlmResponding}
+                      sendTextMessage={sendTextMessage}
+                      speakText={speakText}
+                      currentlySpeakingText={currentlySpeakingText}
+                    />
                   ))}
                 </div>
               )}
