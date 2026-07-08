@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { audioConfig } from '../config/audioConfig';
 import { PlaybackQueueManager, robustSpeechCancel } from '../queue/PlaybackQueueManager';
 import { logger } from '@/utils/logger';
+import { Lipsync } from 'wawa-lipsync';
 import { RecordingStatus } from 'shared-contracts';
 
 // Import sub-hooks
@@ -43,6 +44,7 @@ export interface UseAudioRecorderReturn {
   suggestions: string[];
   speakText: (text: string) => void;
   currentlySpeakingText: string | null;
+  lipsyncManager: any;
 }
 
 /**
@@ -59,6 +61,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [currentlySpeakingText, setCurrentlySpeakingText] = useState<string | null>(null);
   const activeSpeakIdRef = useRef<number>(0);
+  const lipsyncManagerRef = useRef<any>(null);
 
   // Settings & Preferences stored in LocalStorage
   const [useBrowserTts, setUseBrowserTts] = useState<boolean>(() => {
@@ -527,10 +530,28 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         await audioContext.resume();
       }
 
+      if (!lipsyncManagerRef.current) {
+        try {
+          const lipsync = new Lipsync({});
+          // Override default AudioContext and AnalyserNode with ours
+          lipsync.audioContext = audioContext;
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 2048;
+          lipsync.analyser = analyser;
+          lipsync.dataArray = new Uint8Array(analyser.frequencyBinCount);
+          lipsyncManagerRef.current = lipsync;
+        } catch (err) {
+          logger.error('[Lipsync] Failed to initialize:', err);
+        }
+      }
+
       const queue = new PlaybackQueueManager(audioContext);
       queue.useBrowserTts = useBrowserTts;
       queue.ttsVoiceName = ttsVoiceName;
       queue.ttsRate = ttsRate;
+      if (lipsyncManagerRef.current) {
+        queue.analyserNode = lipsyncManagerRef.current.analyser;
+      }
       queue.onSentenceStart = (sentenceText) => {
         setCurrentPlayingSentence(sentenceText);
         setHighlightedWordIndex(-1);
@@ -722,5 +743,6 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     suggestions,
     speakText,
     currentlySpeakingText,
+    lipsyncManager: lipsyncManagerRef.current,
   };
 }

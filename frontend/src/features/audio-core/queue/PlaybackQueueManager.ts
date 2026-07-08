@@ -88,6 +88,7 @@ export class PlaybackQueueManager {
   public useBrowserTts: boolean = false;
   public ttsVoiceName: string | null = null;
   public ttsRate: number = 1.0;
+  public analyserNode: AnalyserNode | null = null;
   private totalChunks: number | null = null;
   private activeUtterancesCount: number = 0;
   private currentPlayingChunk: PlaybackChunk | null = null;
@@ -233,7 +234,12 @@ export class PlaybackQueueManager {
       // Schedule Audio Buffer Source Node
       const sourceNode = this.audioContext.createBufferSource();
       sourceNode.buffer = audioBuffer;
-      sourceNode.connect(this.audioContext.destination);
+      if (this.analyserNode) {
+        sourceNode.connect(this.analyserNode);
+        this.analyserNode.connect(this.audioContext.destination);
+      } else {
+        sourceNode.connect(this.audioContext.destination);
+      }
 
       sourceNode.start(scheduledTime);
       this.activeSources.add(sourceNode);

@@ -32,6 +32,7 @@ function App(): React.ReactElement {
     suggestions,
     speakText,
     currentlySpeakingText,
+    lipsyncManager,
   } = useAudioRecorder(config.apiUrl);
 
   const isSessionActive = chatHistory.length > 0 || (status !== 'IDLE' && status !== 'ERROR');
@@ -56,6 +57,7 @@ function App(): React.ReactElement {
           suggestions={suggestions}
           speakText={speakText}
           currentlySpeakingText={currentlySpeakingText}
+          lipsyncManager={lipsyncManager}
           ttsVoiceName={ttsVoiceName}
           changeTtsVoiceName={changeTtsVoiceName}
           ttsRate={ttsRate}

@@ -5,6 +5,10 @@ import { Mic, Send, RotateCcw, AlertCircle, Settings, Volume2, X } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BlurText } from '@/components/react-bits/BlurText';
+import { Experience } from '@/components/3d/Experience';
+import { Canvas } from '@react-three/fiber';
+import { Bloom, DepthOfField, EffectComposer } from '@react-three/postprocessing';
+import { Suspense } from 'react';
 
 interface AudioDashboardProps {
   isRecording: boolean;
@@ -22,6 +26,7 @@ interface AudioDashboardProps {
   suggestions: string[];
   speakText: (text: string) => void;
   currentlySpeakingText?: string | null;
+  lipsyncManager: any;
   ttsVoiceName: string | null;
   changeTtsVoiceName: (val: string | null) => void;
   ttsRate: number;
@@ -51,6 +56,7 @@ export function AudioDashboard({
   suggestions,
   speakText,
   currentlySpeakingText = null,
+  lipsyncManager,
   ttsVoiceName,
   changeTtsVoiceName,
   ttsRate,
@@ -435,9 +441,35 @@ export function AudioDashboard({
           </div>
         ) : (
           /* Active Chat Workspace */
-          <div className="flex-1 flex flex-col min-h-0 bg-neutral-950 sm:border sm:border-neutral-900 sm:rounded-xl border-0 rounded-none overflow-hidden shadow-inner">
+          <div className="flex-1 flex flex-col md:flex-row min-h-0 bg-neutral-950 sm:border sm:border-neutral-900 sm:rounded-xl border-0 rounded-none overflow-hidden shadow-inner">
             
-            {/* IELTS Part 2 (Cue Card) countdown timer visualizer */}
+            {/* 3D Canvas Column */}
+            <div className="w-full md:w-1/2 h-[280px] md:h-full relative border-b md:border-b-0 md:border-r border-neutral-900 bg-[#121315]/40 shrink-0">
+              <Canvas shadows camera={{ position: [3, 3, 3], fov: 30 }} className="w-full h-full">
+                <color attach="background" args={["#121315"]} />
+                <Suspense fallback={
+                  <div className="absolute inset-0 flex items-center justify-center bg-[#121315] text-neutral-500 font-mono text-[10px] uppercase tracking-wider">
+                    Loading 3D Tutor...
+                  </div>
+                }>
+                  <Experience status={status} useBrowserTts={useBrowserTts} lipsyncManager={lipsyncManager} />
+                </Suspense>
+                <EffectComposer>
+                  <Bloom intensity={1.0} luminanceThreshold={0.9} mipmapBlur />
+                  <DepthOfField
+                    blur={1.5}
+                    bokehScale={4}
+                    target={[0, 1.8, 0]}
+                    focalLength={5}
+                    height={512}
+                  />
+                </EffectComposer>
+              </Canvas>
+            </div>
+
+            {/* Chat Log & Timer Column */}
+            <div className="flex-1 flex flex-col min-h-0 relative">
+              {/* IELTS Part 2 (Cue Card) countdown timer visualizer */}
             {activeIeltsPart === 'part2' && part2Phase !== 'idle' && part2Phase !== 'done' && (
               <div className="bg-neutral-900 border-b border-neutral-800 p-4 flex flex-col gap-3 text-left animate-fade-in">
                 <div className="flex items-center justify-between">
@@ -588,6 +620,7 @@ export function AudioDashboard({
                 />
               </div>
             )}
+            </div>
           </div>
         )}
       </div>
