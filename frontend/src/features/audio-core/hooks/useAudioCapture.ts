@@ -58,7 +58,7 @@ export function useAudioCapture({
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
-        autoGainControl: true,
+        autoGainControl: false,
       },
     });
     mediaStreamRef.current = stream;
@@ -69,7 +69,9 @@ export function useAudioCapture({
 
     audioInputRef.current = audioContext.createMediaStreamSource(stream);
     audioInputRef.current.connect(workletNode);
-    workletNode.connect(audioContext.destination);
+    // Note: Do NOT connect workletNode to audioContext.destination.
+    // Connecting it loops the microphone audio back to the speakers, which triggers
+    // aggressive echo cancellation ducking (making the voice go loud/quiet).
 
     workletNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
       const inputData = event.data;

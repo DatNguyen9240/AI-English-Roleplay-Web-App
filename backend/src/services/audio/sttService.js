@@ -69,6 +69,7 @@ class WhisperSttService extends SttService {
         '-f', wavPath,
         '-nt',      // suppress timestamp lines
         '-l', 'en', // language hint for speed
+        '-nc',      // disable past text context to prevent repetition loops
       ]);
 
       let stdout = '';

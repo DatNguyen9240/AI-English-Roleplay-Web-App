@@ -417,10 +417,13 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     robustSpeechCancel();
     setCurrentlySpeakingText(null);
     
+    // Stop speech recognition when sending message to release the mic track
+    stopSpeechRecognition();
+    
     resetCaptureBuffers();
     sendTextInput(text);
     updateStatus('PROCESSING');
-  }, [resetCaptureBuffers, sendTextInput, updateStatus]);
+  }, [resetCaptureBuffers, sendTextInput, updateStatus, stopSpeechRecognition]);
 
   const stopRecording = useCallback((): void => {
     setIsRecording(false);

@@ -94,6 +94,77 @@ app.get('/health', async (_req, res) => {
   res.json({ status: 'ok', recordingsCount });
 });
 
+// Dictionary word info lookup (Gemini-backed translation + usage helper)
+app.get('/api/word-info', async (req, res) => {
+  const word = req.query.word;
+  if (!word || typeof word !== 'string') {
+    return res.status(400).json({ error: 'Word parameter is required' });
+  }
+
+  logger.info({ word }, 'DICTIONARY_LOOKUP_REQUEST');
+
+  if (useLlmMocks) {
+    return res.json({
+      word: word,
+      phonetic: `/${word.toLowerCase().replace(/[^a-z]/g, '')}/`,
+      translation: `dịch nghĩa của "${word}"`,
+      definition: `A mock definition for "${word}" since mocks are enabled.`,
+      examples: [
+        {
+          en: `This is a mock example sentence demonstrating the word "${word}".`,
+          vi: `Đây là câu ví dụ mô phỏng cho từ "${word}".`
+        },
+        {
+          en: `You can use "${word}" in many different contexts.`,
+          vi: `Bạn có thể sử dụng "${word}" trong nhiều ngữ cảnh khác nhau.`
+        }
+      ]
+    });
+  }
+
+  try {
+    const dictionarySystemPrompt = 
+      "You are a helpful ESL dictionary assistant. Your job is to analyze the English word or phrase provided by the user and return a JSON object with the following fields:\n" +
+      "{\n" +
+      "  \"word\": \"the word itself\",\n" +
+      "  \"phonetic\": \"IPA phonetic spelling (British or American English)\",\n" +
+      "  \"translation\": \"Vietnamese translation\",\n" +
+      "  \"definition\": \"A simple, clear English definition (suitable for ESL learners)\",\n" +
+      "  \"examples\": [\n" +
+      "    {\n" +
+      "      \"en\": \"An English example sentence demonstrating practical usage of the word\",\n" +
+      "      \"vi\": \"Vietnamese translation of the example sentence\"\n" +
+      "    },\n" +
+      "    {\n" +
+      "      \"en\": \"Another English example sentence\",\n" +
+      "      \"vi\": \"Vietnamese translation of the second example sentence\"\n" +
+      "    }\n" +
+      "  ]\n" +
+      "}\n" +
+      "IMPORTANT: Return ONLY the JSON object. Do not include markdown code block syntax (like ```json), explanations, or any other characters. Return pure, valid JSON.";
+
+    const messages = [
+      { role: 'user', content: `Analyze the word: "${word}"` }
+    ];
+
+    const result = await llmService.generateStream(
+      messages,
+      () => {}, // Empty callback since we don't need tokens streaming
+      null,
+      dictionarySystemPrompt
+    );
+
+    // Parse the result
+    const cleanResult = result.replace(/```json/g, '').replace(/```/g, '').trim();
+    const parsedData = JSON.parse(cleanResult);
+    res.json(parsedData);
+  } catch (err) {
+    logger.error({ word, error: err.message }, 'DICTIONARY_LOOKUP_FAILED');
+    res.status(500).json({ error: 'Failed to look up word details' });
+  }
+});
+
+
 // ── HTTP + Socket.IO server ──────────────────────────────────────────────────
 
 const server = http.createServer(app);
