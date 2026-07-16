@@ -21,17 +21,36 @@ export const Character = ({ status, useBrowserTts, lipsyncManager, ...props }: C
   useEffect(() => {
     scene.traverse((child) => {
       if ((child as any).isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = false;
         child.frustumCulled = false;
-        (child as any).material = new MeshPhysicalMaterial({
-          ...(child as any).material,
-          roughness: 1,
-          ior: 2.2,
-          iridescence: 0.7,
-          iridescenceIOR: 1.3,
-          reflectivity: 1,
-        });
+        
+        const oldMaterial = (child as any).material;
+        const newMaterial = new MeshPhysicalMaterial();
+        
+        // Copy standard properties if they exist on the old material
+        if (oldMaterial.color) newMaterial.color.copy(oldMaterial.color);
+        if (oldMaterial.map) newMaterial.map = oldMaterial.map;
+        if (oldMaterial.roughnessMap) newMaterial.roughnessMap = oldMaterial.roughnessMap;
+        if (oldMaterial.metalnessMap) newMaterial.metalnessMap = oldMaterial.metalnessMap;
+        if (oldMaterial.normalMap) newMaterial.normalMap = oldMaterial.normalMap;
+        if (oldMaterial.normalScale && newMaterial.normalScale) newMaterial.normalScale.copy(oldMaterial.normalScale);
+        if (oldMaterial.aoMap) newMaterial.aoMap = oldMaterial.aoMap;
+        if (oldMaterial.aoMapIntensity !== undefined) newMaterial.aoMapIntensity = oldMaterial.aoMapIntensity;
+        if (oldMaterial.emissive) newMaterial.emissive.copy(oldMaterial.emissive);
+        if (oldMaterial.emissiveMap) newMaterial.emissiveMap = oldMaterial.emissiveMap;
+        if (oldMaterial.emissiveIntensity !== undefined) newMaterial.emissiveIntensity = oldMaterial.emissiveIntensity;
+        if (oldMaterial.opacity !== undefined) newMaterial.opacity = oldMaterial.opacity;
+        if (oldMaterial.transparent !== undefined) newMaterial.transparent = oldMaterial.transparent;
+        if (oldMaterial.alphaTest !== undefined) newMaterial.alphaTest = oldMaterial.alphaTest;
+        if (oldMaterial.side !== undefined) newMaterial.side = oldMaterial.side;
+        
+        // Apply custom physical values
+        newMaterial.roughness = 1;
+        newMaterial.ior = 2.2;
+        newMaterial.iridescence = 0.7;
+        newMaterial.iridescenceIOR = 1.3;
+        newMaterial.reflectivity = 1;
+        
+        (child as any).material = newMaterial;
       }
     });
   }, [scene]);

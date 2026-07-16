@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input';
 import { BlurText } from '@/components/react-bits/BlurText';
 import { Experience } from '@/components/3d/Experience';
 import { Canvas } from '@react-three/fiber';
-import { Bloom, DepthOfField, EffectComposer } from '@react-three/postprocessing';
 import { Suspense } from 'react';
+import { config } from '@/config';
 
 interface AudioDashboardProps {
   isRecording: boolean;
@@ -864,26 +864,16 @@ export function AudioDashboard({
 
             {/* 3D Canvas Column */}
             <div className="w-full md:w-1/2 h-[280px] md:h-full relative border-b md:border-b-0 md:border-r border-neutral-900 bg-[#121315]/40 shrink-0">
-              <Canvas shadows camera={{ position: [3, 3, 3], fov: 30 }} className="w-full h-full">
-                <color attach="background" args={["#121315"]} />
-                <Suspense fallback={
-                  <div className="absolute inset-0 flex items-center justify-center bg-[#121315] text-neutral-500 font-mono text-[10px] uppercase tracking-wider">
-                    Loading 3D Tutor...
-                  </div>
-                }>
+              <Suspense fallback={
+                <div className="absolute inset-0 flex items-center justify-center bg-[#121315] text-neutral-500 font-mono text-[10px] uppercase tracking-wider">
+                  Loading 3D Tutor...
+                </div>
+              }>
+                <Canvas camera={{ position: [3, 3, 3], fov: 30 }} className="w-full h-full">
+                  <color attach="background" args={["#121315"]} />
                   <Experience status={status} useBrowserTts={useBrowserTts} lipsyncManager={lipsyncManager} />
-                </Suspense>
-                <EffectComposer>
-                  <Bloom intensity={1.0} luminanceThreshold={0.9} mipmapBlur />
-                  <DepthOfField
-                    blur={1.5}
-                    bokehScale={4}
-                    target={[0, 1.8, 0]}
-                    focalLength={5}
-                    height={512}
-                  />
-                </EffectComposer>
-              </Canvas>
+                </Canvas>
+              </Suspense>
             </div>
 
             {/* Chat Log & Timer Column */}

@@ -32,9 +32,9 @@ export function BlurText({
       opacity: 1,
       y: 0,
       transition: {
-        type: 'spring',
-        damping: 12,
-        stiffness: 100,
+        filter: { type: 'tween', duration: 0.2 },
+        opacity: { duration: 0.25 },
+        y: { type: 'spring', damping: 12, stiffness: 100 },
       },
     },
   };
