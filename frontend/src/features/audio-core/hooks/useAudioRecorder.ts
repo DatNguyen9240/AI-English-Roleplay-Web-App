@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { audioConfig } from '../config/audioConfig';
 import { PlaybackQueueManager, robustSpeechCancel } from '../queue/PlaybackQueueManager';
+import { pickSantaVoice, SANTA_VOICE_ID, SANTA_VOICE_PITCH, SANTA_VOICE_RATE } from '../voicePresets';
 import { logger } from '@/utils/logger';
 import { Lipsync } from 'wawa-lipsync';
 import { RecordingStatus } from 'shared-contracts';
@@ -640,7 +641,10 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
       
       const voices = window.speechSynthesis.getVoices();
       let englishVoice: SpeechSynthesisVoice | null = null;
-      if (ttsVoiceName) {
+      const isSantaVoice = ttsVoiceName === SANTA_VOICE_ID;
+      if (isSantaVoice) {
+        englishVoice = pickSantaVoice(voices);
+      } else if (ttsVoiceName) {
         englishVoice = voices.find(v => v.name === ttsVoiceName) || null;
       }
       if (!englishVoice) {
@@ -678,7 +682,8 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         if (englishVoice) {
           utterance.voice = englishVoice;
         }
-        utterance.rate = ttsRate;
+        utterance.rate = isSantaVoice ? Math.min(ttsRate, SANTA_VOICE_RATE) : ttsRate;
+        utterance.pitch = isSantaVoice ? SANTA_VOICE_PITCH : 1;
 
         utterance.onend = () => {
           if (currentSpeakId === activeSpeakIdRef.current) {

@@ -1,5 +1,6 @@
 import { logger } from '@/utils/logger';
 import { audioConfig } from '../config/audioConfig';
+import { pickSantaVoice, SANTA_VOICE_ID, SANTA_VOICE_PITCH, SANTA_VOICE_RATE } from '../voicePresets';
 
 export interface WordTiming {
   text: string;
@@ -319,8 +320,10 @@ export class PlaybackQueueManager {
       // Try to get a high quality English voice consistently
       let englishVoice: SpeechSynthesisVoice | null = null;
       if (typeof window !== 'undefined' && window.speechSynthesis) {
-        const voices = window.speechSynthesis.getVoices();
-        if (this.ttsVoiceName) {
+      const voices = window.speechSynthesis.getVoices();
+        if (this.ttsVoiceName === SANTA_VOICE_ID) {
+          englishVoice = pickSantaVoice(voices);
+        } else if (this.ttsVoiceName) {
           englishVoice = voices.find(v => v.name === this.ttsVoiceName) || null;
         }
       }
@@ -331,8 +334,11 @@ export class PlaybackQueueManager {
         utterance.voice = englishVoice;
       }
 
-      // Set playback speed
-      utterance.rate = this.ttsRate;
+      // Santa preset lowers pitch and caps speed for a warmer, slower delivery.
+      const isSantaVoice = this.ttsVoiceName === SANTA_VOICE_ID;
+      const speechRate = isSantaVoice ? Math.min(this.ttsRate, SANTA_VOICE_RATE) : this.ttsRate;
+      utterance.rate = speechRate;
+      utterance.pitch = isSantaVoice ? SANTA_VOICE_PITCH : 1;
 
       this.activeUtterance = utterance;
 
@@ -367,7 +373,7 @@ export class PlaybackQueueManager {
       // Local helper to trigger estimated word timing timeouts if onboundary fails to fire
       const triggerFallbackTimings = () => {
         logger.warn('[BrowserTTS] onboundary event did not fire. Falling back to estimated word timings.');
-        const ttsRate = this.ttsRate || 1.0;
+        const ttsRate = speechRate || 1.0;
         let currentWordDelay = 0;
 
         chunk.words.forEach((word, idx) => {
@@ -469,7 +475,7 @@ export class PlaybackQueueManager {
       window.speechSynthesis.speak(utterance);
 
       // Safety timeout: Chrome can get stuck and fail to trigger onend/onerror
-      const estimatedDurationMs = (sentenceText.length * 120) / (this.ttsRate || 1.0) + 4000;
+      const estimatedDurationMs = (sentenceText.length * 120) / (speechRate || 1.0) + 4000;
       safetyTimeout = setTimeout(() => {
         if (this.activeUtterance === utterance) {
           logger.warn(`[BrowserTTS] Safety timeout reached for sentence: "${sentenceText}". Forcing end.`);

@@ -9,6 +9,7 @@ import { Experience } from '@/components/3d/Experience';
 import { Canvas } from '@react-three/fiber';
 import { Suspense } from 'react';
 import { config } from '@/config';
+import { SANTA_VOICE_ID } from '@/features/audio-core/voicePresets';
 
 interface AudioDashboardProps {
   isRecording: boolean;
@@ -724,6 +725,7 @@ export function AudioDashboard({
                     onChange={(e) => changeTtsVoiceName(e.target.value || null)}
                     className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-white text-xs focus:outline-none focus:border-neutral-500 cursor-pointer"
                   >
+                    <option value={SANTA_VOICE_ID}>Santa (deep &amp; warm)</option>
                     <option value="">System Default</option>
                     {availableVoices.map((voice) => (
                       <option key={voice.name} value={voice.name}>
