@@ -1,6 +1,5 @@
-import { Gltf } from "@react-three/drei";
 import { useEffect } from "react";
-import { degToRad } from "three/src/math/MathUtils.js";
+import { MathUtils } from "three";
 import { CameraManager } from "./CameraManager";
 import { Character } from "./Character";
 import { RecordingStatus } from "shared-contracts";
@@ -26,7 +25,7 @@ export const Experience = ({ status, useBrowserTts, lipsyncManager, setAppLoaded
         status={status}
         useBrowserTts={useBrowserTts}
         lipsyncManager={lipsyncManager}
-        rotation-y={degToRad(10)}
+        rotation-y={MathUtils.degToRad(10)}
         scale={0.6}
       />
 
@@ -45,7 +44,7 @@ export const Experience = ({ status, useBrowserTts, lipsyncManager, setAppLoaded
       {/* Christmas Scene GLTF */}
       {/*
       <Gltf
-        rotation-y={degToRad(-20)}
+        rotation-y={MathUtils.degToRad(-20)}
         position-y={7.72}
         src="models/lowp_-_christmas_-_cc0_asset_pack-opt.glb"
       />

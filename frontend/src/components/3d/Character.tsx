@@ -1,8 +1,7 @@
 import { useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MeshPhysicalMaterial, SkinnedMesh } from "three";
-import { lerp, randInt } from "three/src/math/MathUtils.js";
+import { MeshPhysicalMaterial, SkinnedMesh, MathUtils, Object3D } from "three";
 import { VISEMES } from "wawa-lipsync";
 import { RecordingStatus } from "shared-contracts";
 
@@ -19,7 +18,7 @@ export const Character = ({ status, useBrowserTts, lipsyncManager, ...props }: C
   const { actions, mixer } = useAnimations(animations, scene);
 
   useEffect(() => {
-    scene.traverse((child) => {
+    scene.traverse((child: Object3D) => {
       if ((child as any).isMesh) {
         child.frustumCulled = false;
         
@@ -59,7 +58,7 @@ export const Character = ({ status, useBrowserTts, lipsyncManager, ...props }: C
 
   useEffect(() => {
     const action = {
-      SPEAKING: ["Talking", "Talking 2 ", "Talking 3"][randInt(0, 2)],
+      SPEAKING: ["Talking", "Talking 2 ", "Talking 3"][MathUtils.randInt(0, 2)],
       THINKING: "Thinking",
       PROCESSING: "Thinking",
       LISTENING: "Idle", // Or a custom listening active posture if available
@@ -84,7 +83,7 @@ export const Character = ({ status, useBrowserTts, lipsyncManager, ...props }: C
   // Blend Shapes
   const avatarSkinnedMeshes = useMemo(() => {
     const skinnedMeshes: SkinnedMesh[] = [];
-    scene.traverse((child) => {
+    scene.traverse((child: Object3D) => {
       if ((child as any).isSkinnedMesh) {
         skinnedMeshes.push(child as SkinnedMesh);
       }
@@ -101,7 +100,7 @@ export const Character = ({ status, useBrowserTts, lipsyncManager, ...props }: C
         const morphIndex = skinnedMesh.morphTargetDictionary[target];
         if (morphIndex !== undefined && skinnedMesh.morphTargetInfluences) {
           const currentValue = skinnedMesh.morphTargetInfluences[morphIndex];
-          skinnedMesh.morphTargetInfluences[morphIndex] = lerp(
+          skinnedMesh.morphTargetInfluences[morphIndex] = MathUtils.lerp(
             currentValue,
             value,
             speed
@@ -123,7 +122,7 @@ export const Character = ({ status, useBrowserTts, lipsyncManager, ...props }: C
           setBlink(false);
           nextBlink();
         }, 150);
-      }, randInt(1000, 5000));
+      }, MathUtils.randInt(1000, 5000));
     };
     nextBlink();
     return () => clearTimeout(blinkTimeout);
