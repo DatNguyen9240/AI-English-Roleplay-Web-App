@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { RecordingStatus } from 'shared-contracts';
+import type { LearningUpdatePayload } from 'shared-contracts';
 import { ChatMessage } from '@/features/audio-core/hooks/useAudioRecorder';
 import { Mic, Send, RotateCcw, AlertCircle, Settings, Volume2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,7 @@ interface AudioDashboardProps {
   suggestions: string[];
   speakText: (text: string) => void;
   currentlySpeakingText?: string | null;
+  learningUpdate: LearningUpdatePayload | null;
   lipsyncManager: any;
   ttsVoiceName: string | null;
   changeTtsVoiceName: (val: string | null) => void;
@@ -417,6 +419,7 @@ export function AudioDashboard({
   suggestions,
   speakText,
   currentlySpeakingText = null,
+  learningUpdate,
   lipsyncManager,
   ttsVoiceName,
   changeTtsVoiceName,
@@ -999,6 +1002,28 @@ export function AudioDashboard({
                     <div className="px-4 py-2.5 rounded-xl text-sm bg-neutral-900/40 border border-neutral-800 text-neutral-400 italic">
                       Thinking...
                     </div>
+                  </div>
+                )}
+
+                {learningUpdate?.assessment && (
+                  <div className="mr-auto max-w-[88%] rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3.5 py-3 animate-fade-in">
+                    <div className="mb-1.5 flex items-center justify-between gap-3 text-[10px] font-mono uppercase tracking-wider text-emerald-400">
+                      <span>Practice insight</span>
+                      <span>{Math.round(learningUpdate.assessment.score * 100)}%</span>
+                    </div>
+                    {learningUpdate.assessment.feedback.slice(0, 1).map((item, index) => (
+                      <div key={`${item.type}-${index}`} className="text-xs leading-relaxed text-neutral-300">
+                        <p>{item.message}</p>
+                        <button
+                          type="button"
+                          onClick={() => sendTextMessage(item.retryPrompt)}
+                          disabled={isLlmResponding}
+                          className="mt-2 text-[11px] font-medium text-emerald-300 hover:text-emerald-100 disabled:opacity-50"
+                        >
+                          Try again →
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
 

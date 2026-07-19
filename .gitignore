@@ -27,6 +27,7 @@ out/
 # OS files
 .DS_Store
 Thumbs.db
+~$*.docx
 
 # Log files
 npm-debug.log*
