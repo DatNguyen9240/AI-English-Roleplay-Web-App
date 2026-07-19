@@ -12,6 +12,8 @@ const { MockSttService, WhisperSttService } = require('@services/audio/sttServic
 const { MockLlmService, OpenRouterLlmService } = require('@services/ai/llmService');
 const { MockTtsService, OpenAiTtsService } = require('@services/audio/ttsService');
 const registerAudioHandlers = require('@sockets/audioSocket');
+const { prisma } = require('./infrastructure/prismaClient');
+const { SpeakingSliceService } = require('./application/speakingSliceService');
 
 // ── Service instantiation (Dependency Injection) ────────────────────────────
 
@@ -49,6 +51,8 @@ const ttsService =
         model: process.env.TTS_MODEL,
         voice: process.env.TTS_VOICE,
       });
+
+const speakingSliceService = new SpeakingSliceService(prisma, logger);
 
 // Dictionary lookups are deterministic enough to reuse and otherwise each
 // click consumes a full LLM request. Keep a small bounded in-memory cache.
@@ -209,7 +213,7 @@ io.on('connection', (socket) => {
     { socketId: socket.id },
     'USER_CONNECTED (WebSocket Connection Established)'
   );
-  registerAudioHandlers(io, socket, logger, storageService, sttService, llmService, ttsService);
+  registerAudioHandlers(io, socket, logger, storageService, sttService, llmService, ttsService, speakingSliceService);
 });
 
 module.exports = { app, server };

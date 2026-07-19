@@ -17,8 +17,216 @@ model User {
   updatedAt     DateTime       @updatedAt
   conversations Conversation[]
   memories      Memory[]
+  learningSessions LearningSession[]
 
   @@map("users")
+}
+
+enum LearningSessionStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
+}
+
+enum AttemptInputType {
+  TEXT
+  VOICE
+}
+
+enum AssessmentSource {
+  RULE
+  AI
+  HUMAN
+}
+
+model KnowledgeNode {
+  id                String                 @id @default(uuid())
+  key               String                 @unique
+  nodeType          String
+  currentVersion    Int                    @default(1)
+  createdAt         DateTime               @default(now())
+  versions          KnowledgeNodeVersion[]
+  userKnowledge     UserKnowledge[]
+  activityKnowledge ActivityKnowledge[]
+
+  @@map("knowledge_nodes")
+}
+
+model KnowledgeNodeVersion {
+  id              String        @id @default(uuid())
+  knowledgeNodeId String
+  knowledgeNode   KnowledgeNode @relation(fields: [knowledgeNodeId], references: [id], onDelete: Cascade)
+  version         Int
+  label           String
+  definition      String?
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  deltas          KnowledgeDelta[]
+
+  @@unique([knowledgeNodeId, version])
+  @@map("knowledge_node_versions")
+}
+
+model ContentBlock {
+  id             String                @id @default(uuid())
+  slug           String                @unique
+  blockType      String
+  currentVersion Int                   @default(1)
+  createdAt      DateTime              @default(now())
+  versions       ContentBlockVersion[]
+  activities     Activity[]
+
+  @@map("content_blocks")
+}
+
+model ContentBlockVersion {
+  id             String       @id @default(uuid())
+  contentBlockId String
+  contentBlock   ContentBlock @relation(fields: [contentBlockId], references: [id], onDelete: Cascade)
+  version        Int
+  content        Json
+  createdAt      DateTime     @default(now())
+
+  @@unique([contentBlockId, version])
+  @@map("content_block_versions")
+}
+
+model Activity {
+  id             String             @id @default(uuid())
+  slug           String             @unique
+  title          String
+  capability     String
+  version        Int                @default(1)
+  config         Json
+  isPublished    Boolean            @default(false)
+  contentBlockId String?
+  contentBlock   ContentBlock?      @relation(fields: [contentBlockId], references: [id], onDelete: SetNull)
+  knowledge      ActivityKnowledge[]
+  sessions       LearningSession[]
+
+  @@map("activities")
+}
+
+model ActivityKnowledge {
+  activityId      String
+  knowledgeNodeId String
+  activity        Activity      @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  knowledgeNode   KnowledgeNode @relation(fields: [knowledgeNodeId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, knowledgeNodeId])
+  @@map("activity_knowledge")
+}
+
+model LearningSession {
+  id            String                @id @default(uuid())
+  learnerKey    String
+  userId        String?
+  user          User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  topic         String
+  capability    String
+  status        LearningSessionStatus @default(ACTIVE)
+  activityId    String?
+  activity      Activity?             @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  startedAt     DateTime              @default(now())
+  completedAt   DateTime?
+  turns         LearningTurn[]
+  decisions     RecommendationDecision[]
+
+  @@index([learnerKey, startedAt])
+  @@map("learning_sessions")
+}
+
+model LearningTurn {
+  id             String          @id @default(uuid())
+  sessionId      String
+  session        LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sequence       Int
+  idempotencyKey String          @unique
+  inputType      AttemptInputType
+  transcript     String
+  createdAt      DateTime        @default(now())
+  assessments    AssessmentResult[]
+
+  @@unique([sessionId, sequence])
+  @@map("learning_turns")
+}
+
+model AssessmentResult {
+  id                String        @id @default(uuid())
+  turnId            String
+  turn              LearningTurn  @relation(fields: [turnId], references: [id], onDelete: Cascade)
+  source            AssessmentSource
+  score             Float
+  feedback          Json
+  attemptSnapshot   Json
+  capabilityVersion Json
+  rubricVersion     Json
+  policyVersion     Json
+  promptVersion     Json?
+  supersedesId      String?
+  createdAt         DateTime      @default(now())
+  deltas            KnowledgeDelta[]
+
+  @@index([turnId, createdAt])
+  @@map("assessment_results")
+}
+
+model KnowledgeDelta {
+  id                     String               @id @default(uuid())
+  assessmentResultId     String
+  assessmentResult       AssessmentResult     @relation(fields: [assessmentResultId], references: [id], onDelete: Cascade)
+  knowledgeNodeVersionId String
+  knowledgeNodeVersion   KnowledgeNodeVersion @relation(fields: [knowledgeNodeVersionId], references: [id], onDelete: Restrict)
+  learnerKey             String
+  masteryDelta           Float
+  confidenceDelta        Float
+  reasonCodes            String[]
+  createdAt              DateTime             @default(now())
+
+  @@index([learnerKey, createdAt])
+  @@map("knowledge_deltas")
+}
+
+model UserKnowledge {
+  id              String        @id @default(uuid())
+  learnerKey      String
+  knowledgeNodeId String
+  knowledgeNode   KnowledgeNode @relation(fields: [knowledgeNodeId], references: [id], onDelete: Cascade)
+  mastery         Float         @default(0)
+  confidence      Float         @default(0)
+  exposureCount   Int           @default(0)
+  errorCount      Int           @default(0)
+  nextReviewAt    DateTime?
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([learnerKey, knowledgeNodeId])
+  @@index([learnerKey, nextReviewAt])
+  @@map("user_knowledge")
+}
+
+model RecommendationDecision {
+  id          String          @id @default(uuid())
+  sessionId   String
+  session     LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  decision    Json
+  createdAt   DateTime        @default(now())
+
+  @@index([sessionId, createdAt])
+  @@map("recommendation_decisions")
+}
+
+model OutboxEvent {
+  id             String   @id @default(uuid())
+  eventType      String
+  aggregateType  String
+  aggregateId    String
+  idempotencyKey String   @unique
+  payload        Json
+  occurredAt     DateTime @default(now())
+  publishedAt    DateTime?
+
+  @@index([publishedAt, occurredAt])
+  @@map("outbox_events")
 }
 
 model Scenario {

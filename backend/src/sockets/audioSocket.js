@@ -41,13 +41,36 @@ setInterval(() => {
  * @param {import('../services/audio/sttService').SttService} sttService
  * @param {import('../services/ai/llmService').LlmService} llmService
  * @param {import('../services/audio/ttsService').TtsService} ttsService
+ * @param {import('../application/speakingSliceService').SpeakingSliceService} speakingSliceService
  */
-function registerAudioHandlers(io, socket, logger, storageService, sttService, llmService, ttsService) {
+function registerAudioHandlers(io, socket, logger, storageService, sttService, llmService, ttsService, speakingSliceService) {
   
   // Register session with a state transition callback that broadcasts back to client
   const session = sessionManager.createSession(socket.id, (fromState, toState) => {
     socket.emit(SOCKET_EVENTS.STATE_TRANSITION, { state: toState });
   });
+  const handshakeLearnerKey = socket.handshake.auth?.learnerKey;
+  session.learnerKey = typeof handshakeLearnerKey === 'string' && handshakeLearnerKey.length <= 128
+    ? handshakeLearnerKey
+    : `socket:${socket.id}`;
+
+  async function recordLearningTurn(transcript, inputType, requestId) {
+    if (!session.learningSessionId) return;
+    try {
+      const update = await speakingSliceService.processTurn({
+        sessionId: session.learningSessionId,
+        learnerKey: session.learnerKey,
+        transcript,
+        inputType,
+        idempotencyKey: requestId,
+        topic: session.topic || 'general conversation',
+      });
+      socket.emit(SOCKET_EVENTS.LEARNING_UPDATE, update);
+    } catch (error) {
+      // Learning persistence must never take down an existing realtime tutor turn.
+      logger.error({ sessionId: socket.id, requestId, error: error.message }, 'LEARNING_SLICE_FAILED');
+    }
+  }
 
   // Client connects exactly when startRecording is called, so transition to LISTENING
   session.fsm.transition(STATES.LISTENING);
@@ -369,6 +392,8 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       // Add user turn to conversation history
       session.conversationHistory.push({ role: 'user', content: transcript });
 
+      void recordLearningTurn(transcript, 'VOICE', requestId);
+
       // Run pipeline
       await executeLlmAndTtsPipeline(session, socket, requestId);
 
@@ -422,6 +447,8 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
       // Add user turn to conversation history
       session.conversationHistory.push({ role: 'user', content: text });
 
+      void recordLearningTurn(text, 'TEXT', requestId);
+
       // Run pipeline
       await executeLlmAndTtsPipeline(session, socket, requestId);
 
@@ -459,8 +486,17 @@ function registerAudioHandlers(io, socket, logger, storageService, sttService, l
 
     // Set custom system prompt for the topic to generate a short passage first
     session.customSystemPrompt = getTopicPrompt(topic, targetBand, ieltsPart);
+    session.topic = topic;
 
     try {
+      try {
+        const learningSession = await speakingSliceService.startSession({ learnerKey: session.learnerKey, topic });
+        session.learningSessionId = learningSession.id;
+      } catch (learningError) {
+        // Keep the legacy realtime tutor available while a deployment is still
+        // waiting for its learning-schema migration.
+        logger.error({ sessionId: socket.id, requestId, error: learningError.message }, 'LEARNING_SESSION_START_FAILED');
+      }
       // Transition FSM to processing then thinking
       session.fsm.transition(STATES.PROCESSING_STT);
       // Emit stt-completed with the system context message so the client shows the topic start

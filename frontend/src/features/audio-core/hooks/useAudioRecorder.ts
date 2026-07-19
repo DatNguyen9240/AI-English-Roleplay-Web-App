@@ -5,6 +5,7 @@ import { pickSantaVoice, SANTA_VOICE_ID, SANTA_VOICE_PITCH, SANTA_VOICE_RATE } f
 import { logger } from '@/utils/logger';
 import { Lipsync } from 'wawa-lipsync';
 import { RecordingStatus } from 'shared-contracts';
+import type { LearningUpdatePayload } from 'shared-contracts';
 
 // Import sub-hooks
 import { useSpeechRecognition } from './useSpeechRecognition';
@@ -46,6 +47,7 @@ export interface UseAudioRecorderReturn {
   suggestions: string[];
   speakText: (text: string) => void;
   currentlySpeakingText: string | null;
+  learningUpdate: LearningUpdatePayload | null;
   lipsyncManager: any;
 }
 
@@ -62,6 +64,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [currentlySpeakingText, setCurrentlySpeakingText] = useState<string | null>(null);
+  const [learningUpdate, setLearningUpdate] = useState<LearningUpdatePayload | null>(null);
   const activeSpeakIdRef = useRef<number>(0);
   const lipsyncManagerRef = useRef<any>(null);
 
@@ -400,6 +403,10 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     playoutQueueRef.current?.stop();
   }, []);
 
+  const handleLearningUpdate = useCallback((update: LearningUpdatePayload) => {
+    setLearningUpdate(update);
+  }, []);
+
   const {
     connectSocket,
     disconnectSocket,
@@ -418,6 +425,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     onLlmStreamDone: handleLlmStreamDone,
     onTtsAudioChunk: handleTtsAudioChunk,
     onSessionError: handleSessionError,
+    onLearningUpdate: handleLearningUpdate,
   });
 
   // ── 3. useAudioCapture hook ──
@@ -616,6 +624,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
     setSuggestions([]);
+    setLearningUpdate(null);
     hasInitialResponseTextRef.current = false;
     isInitialPlaybackReleasedRef.current = false;
     pendingInitialTtsChunksRef.current = [];
@@ -840,6 +849,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
     setSuggestions([]);
+    setLearningUpdate(null);
     setCurrentlySpeakingText(null);
     hasInitialResponseTextRef.current = false;
     isInitialPlaybackReleasedRef.current = false;
@@ -874,6 +884,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     suggestions,
     speakText,
     currentlySpeakingText,
+    learningUpdate,
     lipsyncManager: lipsyncManagerRef.current,
   };
 }

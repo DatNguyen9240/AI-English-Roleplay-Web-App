@@ -8,7 +8,9 @@
     "dev": "nodemon server.js",
     "prisma:generate": "dotenv -e .env.local -- prisma generate",
     "prisma:migrate": "dotenv -e .env.local -- prisma migrate dev",
-    "prisma:seed": "dotenv -e .env.local -- prisma db seed"
+    "prisma:seed": "dotenv -e .env.local -- prisma db seed",
+    "architecture:check": "node scripts/check-architecture.js",
+    "smoke:speaking": "node scripts/smoke-speaking-slice.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

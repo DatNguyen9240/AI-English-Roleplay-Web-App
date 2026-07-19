@@ -4,6 +4,7 @@ import type {
   SttCompletedPayload,
   LlmChunkPayload,
   LlmStreamDonePayload,
+  LearningUpdatePayload,
   SessionErrorPayload,
   TtsAudioChunkPayload,
 } from 'shared-contracts';
@@ -25,6 +26,7 @@ type ServerEvents = {
   [SOCKET_EVENTS.LLM_STREAM_DONE]:  (payload: LlmStreamDonePayload)   => void;
   [SOCKET_EVENTS.TTS_AUDIO_CHUNK]:  (payload: TtsAudioChunkPayload)   => void;
   [SOCKET_EVENTS.SESSION_ERROR]:    (payload: SessionErrorPayload)     => void;
+  [SOCKET_EVENTS.LEARNING_UPDATE]:  (payload: LearningUpdatePayload)   => void;
 };
 
 /**
@@ -46,6 +48,7 @@ export class SocketIOStreamer {
     this.socket = io(socketUrl, {
       transports: ['websocket'],
       withCredentials: true,
+      auth: { learnerKey: getLearnerKey() },
     });
 
     if (options.onConnect)      this.socket.on('connect',       options.onConnect);
@@ -105,4 +108,13 @@ export class SocketIOStreamer {
       this.socket = null;
     }
   }
+}
+
+function getLearnerKey(): string {
+  const storageKey = 'ai_tutor_learner_key';
+  const existing = window.localStorage.getItem(storageKey);
+  if (existing) return existing;
+  const learnerKey = window.crypto?.randomUUID?.() || `learner-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  window.localStorage.setItem(storageKey, learnerKey);
+  return learnerKey;
 }

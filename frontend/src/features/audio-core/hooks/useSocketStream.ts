@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { SocketIOStreamer } from '../services/SocketIOStreamer';
 import { SOCKET_EVENTS } from 'shared-contracts';
+import type { LearningUpdatePayload } from 'shared-contracts';
 
 interface SocketStreamProps {
   socketUrl: string;
@@ -12,6 +13,7 @@ interface SocketStreamProps {
   onLlmStreamDone?: (data: { latencyMs: number; totalChunks?: number; suggestions?: string[] }) => void;
   onTtsAudioChunk?: (data: any) => void;
   onSessionError?: (data: { message: string }) => void;
+  onLearningUpdate?: (data: LearningUpdatePayload) => void;
 }
 
 export function useSocketStream({
@@ -24,6 +26,7 @@ export function useSocketStream({
   onLlmStreamDone,
   onTtsAudioChunk,
   onSessionError,
+  onLearningUpdate,
 }: SocketStreamProps) {
   const streamerRef = useRef<SocketIOStreamer | null>(null);
 
@@ -56,6 +59,9 @@ export function useSocketStream({
   const onSessionErrorRef = useRef(onSessionError);
   onSessionErrorRef.current = onSessionError;
 
+  const onLearningUpdateRef = useRef(onLearningUpdate);
+  onLearningUpdateRef.current = onLearningUpdate;
+
   const connectSocket = useCallback(() => {
     streamerRef.current!.connect(socketUrl, {
       onConnect: () => onConnectRef.current?.(),
@@ -81,6 +87,10 @@ export function useSocketStream({
 
     streamerRef.current!.on(SOCKET_EVENTS.SESSION_ERROR, (data) => {
       onSessionErrorRef.current?.(data);
+    });
+
+    streamerRef.current!.on(SOCKET_EVENTS.LEARNING_UPDATE, (data) => {
+      onLearningUpdateRef.current?.(data);
     });
   }, [socketUrl]);
 

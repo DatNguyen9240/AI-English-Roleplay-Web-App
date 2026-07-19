@@ -16,6 +16,7 @@ export const SOCKET_EVENTS = {
   TTS_AUDIO_CHUNK:  'tts-audio-chunk',
   STATE_TRANSITION: 'state-transition',
   SESSION_ERROR:    'session-error',
+  LEARNING_UPDATE:  'learning-update',
 } as const;
 
 export type SocketEventValue = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
@@ -55,6 +56,20 @@ export interface LlmStreamDonePayload {
 
 export interface SessionErrorPayload {
   message: string;
+}
+
+export interface LearningUpdatePayload {
+  assessment: {
+    id: string;
+    score: number;
+    feedback: Array<{ type: string; priority: string; message: string; retryPrompt: string }>;
+    reasonCodes?: string[];
+  } | null;
+  knowledge: Array<{ knowledgeNodeId: string; mastery: number; confidence: number; nextReviewAt: string | Date | null }>;
+  decision: {
+    outcome: { action: 'retry' | 'continue'; capability: string; topic: string; label: string };
+    reasonCodes: string[];
+  } | null;
 }
 
 export interface TtsAudioChunkPayload {

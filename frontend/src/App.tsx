@@ -36,6 +36,7 @@ function App(): React.ReactElement {
     suggestions,
     speakText,
     currentlySpeakingText,
+    learningUpdate,
     lipsyncManager,
   } = useAudioRecorder(config.apiUrl);
 
@@ -61,6 +62,7 @@ function App(): React.ReactElement {
           suggestions={suggestions}
           speakText={speakText}
           currentlySpeakingText={currentlySpeakingText}
+          learningUpdate={learningUpdate}
           lipsyncManager={lipsyncManager}
           ttsVoiceName={ttsVoiceName}
           changeTtsVoiceName={changeTtsVoiceName}
