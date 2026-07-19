@@ -1,15 +1,30 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { RecordingStatus } from 'shared-contracts';
 import { ChatMessage } from '@/features/audio-core/hooks/useAudioRecorder';
 import { Mic, Send, RotateCcw, AlertCircle, Settings, Volume2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BlurText } from '@/components/react-bits/BlurText';
-import { Experience } from '@/components/3d/Experience';
-import { Canvas } from '@react-three/fiber';
 import { Suspense } from 'react';
 import { config } from '@/config';
 import { SANTA_VOICE_ID } from '@/features/audio-core/voicePresets';
+
+const vietnameseTranslationCache = new Map<string, string>();
+
+async function translateToVietnamese(text: string): Promise<string> {
+  const cached = vietnameseTranslationCache.get(text);
+  if (cached) return cached;
+
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(text)}`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Translation failed');
+  const data = await response.json();
+  const translatedText = data[0].map((x: any) => x[0]).join('');
+  vietnameseTranslationCache.set(text, translatedText);
+  return translatedText;
+}
+
+const TutorCanvas = React.lazy(() => import('@/components/3d/TutorCanvas'));
 
 interface AudioDashboardProps {
   isRecording: boolean;
@@ -33,12 +48,11 @@ interface AudioDashboardProps {
   ttsRate: number;
   changeTtsRate: (val: number) => void;
   availableVoices: SpeechSynthesisVoice[];
+  isVoiceReady: boolean;
   useBrowserTts: boolean;
   toggleBrowserTts: (val: boolean) => void;
   useBrowserStt: boolean;
   toggleBrowserStt: (val: boolean) => void;
-  activeTab: 'practice' | 'about';
-  setActiveTab: (tab: 'practice' | 'about') => void;
 }
 
 interface ChatBubbleProps {
@@ -50,7 +64,7 @@ interface ChatBubbleProps {
   onWordSelected: (word: string) => void;
 }
 
-function ChatBubble({
+const ChatBubble = React.memo(function ChatBubble({
   message,
   isUser,
   currentPlayingSentence,
@@ -70,12 +84,7 @@ function ChatBubble({
     setIsLoading(true);
     try {
       const cleanText = text.replace(/<suggestions>[\s\S]*?<\/suggestions>/g, '').trim();
-      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(cleanText)}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Translation failed');
-      const data = await response.json();
-      const translatedText = data[0].map((x: any) => x[0]).join('');
-      setTranslation(translatedText);
+      setTranslation(await translateToVietnamese(cleanText));
     } catch (e) {
       console.error(e);
       setTranslation('Dịch thất bại. Vui lòng thử lại.');
@@ -248,7 +257,7 @@ function ChatBubble({
       )}
     </div>
   );
-}
+});
 
 interface SuggestionBubbleProps {
   suggestion: string;
@@ -276,12 +285,7 @@ function SuggestionBubble({
     if (translation) return;
     setIsLoading(true);
     try {
-      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(text)}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Translation failed');
-      const data = await response.json();
-      const translatedText = data[0].map((x: any) => x[0]).join('');
-      setTranslation(translatedText);
+      setTranslation(await translateToVietnamese(text));
     } catch (e) {
       console.error(e);
       setTranslation('Dịch thất bại. Vui lòng thử lại.');
@@ -419,16 +423,17 @@ export function AudioDashboard({
   ttsRate,
   changeTtsRate,
   availableVoices,
+  isVoiceReady,
   useBrowserTts,
   toggleBrowserTts,
   useBrowserStt,
   toggleBrowserStt,
-  activeTab,
-  setActiveTab,
 }: AudioDashboardProps): React.ReactElement {
   const [topicInput, setTopicInput] = useState('');
   const [textInput, setTextInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [isTutorModelReady, setIsTutorModelReady] = useState(false);
+  const markTutorModelReady = useCallback(() => setIsTutorModelReady(true), []);
 
   // Dictionary lookup state
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
@@ -459,7 +464,7 @@ export function AudioDashboard({
     }
   };
 
-  const fetchWordInfo = async (word: string) => {
+  const fetchWordInfo = useCallback(async (word: string) => {
     setIsWordInfoLoading(true);
     setWordInfo(null);
     try {
@@ -480,13 +485,13 @@ export function AudioDashboard({
     } finally {
       setIsWordInfoLoading(false);
     }
-  };
+  }, []);
 
-  const handleWordSelected = (word: string) => {
+  const handleWordSelected = useCallback((word: string) => {
     setSelectedWord(word);
     setPopupSlide(0);
     fetchWordInfo(word);
-  };
+  }, [fetchWordInfo]);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -500,6 +505,7 @@ export function AudioDashboard({
 
   const isSessionActive = chatHistory.length > 0 || (status !== 'IDLE' && status !== 'ERROR');
   const isLlmResponding = status === 'THINKING' || status === 'PROCESSING';
+  const isStartupReady = isTutorModelReady && isVoiceReady;
 
   // Auto-scroll to the bottom of the chat, or scroll to top for cue card preparation
   useEffect(() => {
@@ -516,6 +522,7 @@ export function AudioDashboard({
 
   const handleStartPractice = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isStartupReady) return;
     setActiveIeltsPart(ieltsPart);
     if (ieltsPart === 'part2') {
       setPart2Phase('delivery');
@@ -796,6 +803,24 @@ export function AudioDashboard({
       )}
 
       {/* 2. Main Practice Workspace */}
+      {/* Warm the 3D stack only once on the first landing screen. Re-mounting
+          this hidden canvas after Reset causes a visible WebGL hitch. */}
+      {!isSessionActive && !isTutorModelReady && (
+        <div
+          aria-hidden="true"
+          className="fixed -left-px -top-px h-px w-px overflow-hidden opacity-0 pointer-events-none"
+        >
+          <Suspense fallback={null}>
+            <TutorCanvas
+              status="IDLE"
+              useBrowserTts={useBrowserTts}
+              lipsyncManager={null}
+              onReady={markTutorModelReady}
+              className="h-full w-full"
+            />
+          </Suspense>
+        </div>
+      )}
       <div className="flex-1 flex flex-col min-h-0 py-0 sm:py-6">
         {!isSessionActive ? (
           /* Start Screen (Minimalist Topic Selector) */
@@ -854,6 +879,7 @@ export function AudioDashboard({
 
               <Button
                 type="submit"
+                disabled={!isStartupReady}
                 className="w-full h-11 rounded-lg font-bold bg-white hover:bg-neutral-200 text-black transition-colors duration-200 text-sm flex items-center justify-center gap-2 shadow"
               >
                 <span>Start Practice</span>
@@ -871,10 +897,12 @@ export function AudioDashboard({
                   Loading 3D Tutor...
                 </div>
               }>
-                <Canvas camera={{ position: [3, 3, 3], fov: 30 }} className="w-full h-full">
-                  <color attach="background" args={["#121315"]} />
-                  <Experience status={status} useBrowserTts={useBrowserTts} lipsyncManager={lipsyncManager} />
-                </Canvas>
+                <TutorCanvas
+                  status={status}
+                  useBrowserTts={useBrowserTts}
+                  lipsyncManager={lipsyncManager}
+                  className="w-full h-full"
+                />
               </Suspense>
             </div>
 

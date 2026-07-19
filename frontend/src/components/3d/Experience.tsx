@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useRef } from "react";
 import { MathUtils } from "three";
 import { CameraManager } from "./CameraManager";
 import { Character } from "./Character";
@@ -12,9 +12,11 @@ interface ExperienceProps {
 }
 
 export const Experience = ({ status, useBrowserTts, lipsyncManager, setAppLoaded }: ExperienceProps) => {
-  useEffect(() => {
-    if (setAppLoaded) {
-      setAppLoaded();
+  const hasReportedReady = useRef(false);
+  const reportReady = useCallback(() => {
+    if (!hasReportedReady.current) {
+      hasReportedReady.current = true;
+      setAppLoaded?.();
     }
   }, [setAppLoaded]);
 
@@ -25,6 +27,7 @@ export const Experience = ({ status, useBrowserTts, lipsyncManager, setAppLoaded
         status={status}
         useBrowserTts={useBrowserTts}
         lipsyncManager={lipsyncManager}
+        onReady={reportReady}
         rotation-y={MathUtils.degToRad(10)}
         scale={0.6}
       />

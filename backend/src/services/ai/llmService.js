@@ -44,7 +44,7 @@ class MockLlmService extends LlmService {
       '\n<suggestions>["I enjoy playing football with my friends on Saturday afternoons, and then we usually go out for dinner together."]</suggestions>';
 
     if (systemPrompt && messages.length === 0) {
-      const topicMatch = systemPrompt.match(/practice topic is: "([^"]+)"/i);
+      const topicMatch = systemPrompt.match(/(?:practice|discussion|exam) topic is:?[\s]*"([^"]+)"/i);
       if (topicMatch && topicMatch[1]) {
         const topicName = topicMatch[1];
         mockResponse = 

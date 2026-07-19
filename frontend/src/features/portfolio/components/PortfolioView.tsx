@@ -10,11 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Github, Mail, User, Calendar, Sparkles, ArrowRight, Code, BookOpen } from 'lucide-react';
 
 interface PortfolioViewProps {
-  activeTab: 'practice' | 'about';
   setActiveTab: (tab: 'practice' | 'about') => void;
 }
 
-export function PortfolioView({ activeTab, setActiveTab }: PortfolioViewProps): React.ReactElement {
+export function PortfolioView({ setActiveTab }: PortfolioViewProps): React.ReactElement {
   const skillsRow1 = ['React', 'TypeScript', 'Node.js', 'Express', 'Tailwind CSS', 'Vite'];
   const skillsRow2 = ['Socket.io', 'PostgreSQL', 'Prisma ORM', 'Docker', 'AI Prompt Engineering', 'Web Audio API'];
 

@@ -50,6 +50,18 @@ const ttsService =
         voice: process.env.TTS_VOICE,
       });
 
+// Dictionary lookups are deterministic enough to reuse and otherwise each
+// click consumes a full LLM request. Keep a small bounded in-memory cache.
+const WORD_INFO_CACHE_LIMIT = 300;
+const wordInfoCache = new Map();
+
+function cacheWordInfo(cacheKey, value) {
+  wordInfoCache.set(cacheKey, value);
+  if (wordInfoCache.size > WORD_INFO_CACHE_LIMIT) {
+    wordInfoCache.delete(wordInfoCache.keys().next().value);
+  }
+}
+
 // ── Express application ──────────────────────────────────────────────────────
 
 const app = express();
@@ -103,8 +115,23 @@ app.get('/api/word-info', async (req, res) => {
 
   logger.info({ word }, 'DICTIONARY_LOOKUP_REQUEST');
 
+  const cacheKey = word.trim().toLowerCase();
+  const cached = wordInfoCache.get(cacheKey);
+  if (cached) {
+    return res
+      .set('Cache-Control', 'private, max-age=86400')
+      .json(cached);
+  }
+
+  const respondWithWordInfo = (data) => {
+    cacheWordInfo(cacheKey, data);
+    return res
+      .set('Cache-Control', 'private, max-age=86400')
+      .json(data);
+  };
+
   if (useLlmMocks) {
-    return res.json({
+    return respondWithWordInfo({
       word: word,
       phonetic: `/${word.toLowerCase().replace(/[^a-z]/g, '')}/`,
       translation: `dịch nghĩa của "${word}"`,
@@ -157,7 +184,7 @@ app.get('/api/word-info', async (req, res) => {
     // Parse the result
     const cleanResult = result.replace(/```json/g, '').replace(/```/g, '').trim();
     const parsedData = JSON.parse(cleanResult);
-    res.json(parsedData);
+    respondWithWordInfo(parsedData);
   } catch (err) {
     logger.error({ word, error: err.message }, 'DICTIONARY_LOOKUP_FAILED');
     res.status(500).json({ error: 'Failed to look up word details' });

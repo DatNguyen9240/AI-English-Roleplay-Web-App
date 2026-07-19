@@ -110,7 +110,9 @@ export function useAudioCapture({
 
       // 3. Update volume visualizer
       const now = performance.now();
-      if (now - lastVolumeUpdateRef.current > 33) {
+      // The meter is decorative; 10 updates/sec keeps it responsive without
+      // forcing the complete React dashboard to reconcile at 30fps.
+      if (now - lastVolumeUpdateRef.current > 100) {
         setRmsVolume(vadProcessorRef.current?.getVolume() ?? 0);
         lastVolumeUpdateRef.current = now;
       }

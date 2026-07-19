@@ -34,10 +34,10 @@ yarn-debug.log*
 yarn-error.log*
 logs/
 *.log
+vite.config.js.timestamp-*.mjs
 
 # Local Database Volume
 postgres_data/
 
 # Reference Repositories
 references/
-

@@ -42,6 +42,7 @@ export interface UseAudioRecorderReturn {
   ttsRate: number;
   changeTtsRate: (val: number) => void;
   availableVoices: SpeechSynthesisVoice[];
+  isVoiceReady: boolean;
   suggestions: string[];
   speakText: (text: string) => void;
   currentlySpeakingText: string | null;
@@ -97,6 +98,11 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   });
 
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  // Browser voices are populated asynchronously (and often only after the first render).
+  // Do not let the first tutor reply race this initialization.
+  const [isVoiceReady, setIsVoiceReady] = useState(() => {
+    return typeof window === 'undefined' || !window.speechSynthesis || !useBrowserTts;
+  });
 
   // Refs for tracking active context/timeouts
   const statusRef = useRef<RecordingStatus>('IDLE');
@@ -109,6 +115,90 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const playoutQueueRef = useRef<PlaybackQueueManager | null>(null);
   const sttTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const llmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasInitialResponseTextRef = useRef(false);
+  const isInitialPlaybackReleasedRef = useRef(false);
+  const pendingInitialTtsChunksRef = useRef<any[]>([]);
+  const llmTextBufferRef = useRef('');
+  const llmRenderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const enqueueTtsChunk = useCallback((data: any) => {
+    playoutQueueRef.current?.enqueue({
+      requestId: data.requestId,
+      sequenceNumber: data.sequenceNumber,
+      audio: data.audio,
+      sampleRate: data.sampleRate,
+      words: data.words,
+    });
+  }, []);
+
+  const releaseInitialPlayback = useCallback(() => {
+    if (isInitialPlaybackReleasedRef.current) return;
+
+    isInitialPlaybackReleasedRef.current = true;
+    const pendingChunks = pendingInitialTtsChunksRef.current.splice(0);
+    pendingChunks.forEach(enqueueTtsChunk);
+  }, [enqueueTtsChunk]);
+
+  const flushLlmText = useCallback(() => {
+    if (llmRenderTimeoutRef.current) {
+      clearTimeout(llmRenderTimeoutRef.current);
+      llmRenderTimeoutRef.current = null;
+    }
+
+    const nextText = llmTextBufferRef.current;
+    if (!nextText) return;
+
+    setLlmText(nextText);
+    setChatHistory((history) => {
+      const lastMsg = history[history.length - 1];
+      if (lastMsg && lastMsg.sender === 'ai' && lastMsg.id === 'ai-current') {
+        return [...history.slice(0, -1), { ...lastMsg, text: nextText }];
+      }
+      return [
+        ...history,
+        {
+          id: 'ai-current',
+          sender: 'ai',
+          text: nextText,
+          timestamp: Date.now(),
+        },
+      ];
+    });
+  }, []);
+
+  const warmBrowserSpeech = useCallback((): Promise<void> => {
+    if (!useBrowserTts || typeof window === 'undefined' || !window.speechSynthesis) {
+      return Promise.resolve();
+    }
+
+    // This is called synchronously from the Start button handler. A silent,
+    // zero-volume utterance wakes Chrome/Safari's speech engine without making
+    // the learner hear a sound, so the first real tutor sentence does not pay
+    // the engine-startup cost.
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (!settled) {
+          settled = true;
+          window.clearTimeout(timeout);
+          resolve();
+        }
+      };
+      const timeout = window.setTimeout(finish, 300);
+
+      try {
+        const utterance = new SpeechSynthesisUtterance('warmup');
+        utterance.volume = 0;
+        utterance.rate = 10;
+        utterance.onend = finish;
+        utterance.onerror = finish;
+        window.speechSynthesis.speak(utterance);
+      } catch (error) {
+        logger.warn('[Speech] Silent browser TTS warmup failed; continuing normally.', error);
+        finish();
+      }
+    });
+  }, [useBrowserTts]);
 
   // Toggle callbacks
   const toggleBrowserTts = useCallback((val: boolean) => {
@@ -151,25 +241,42 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     }
   }, []);
 
-  // Fetch Speech Synthesis Voices
+  // Fetch and warm up Speech Synthesis voices before a session can start.
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (!useBrowserTts || typeof window === 'undefined' || !window.speechSynthesis) {
+      setIsVoiceReady(true);
+      return;
+    }
+
+    let isMounted = true;
     const updateVoices = () => {
       const voices = window.speechSynthesis.getVoices();
       const enVoices = voices.filter(v => v.lang.startsWith('en'));
       setAvailableVoices(enVoices);
-    };
-
-    updateVoices();
-    if ('onvoiceschanged' in window.speechSynthesis) {
-      window.speechSynthesis.onvoiceschanged = updateVoices;
-    }
-    return () => {
-      if (window.speechSynthesis && 'onvoiceschanged' in window.speechSynthesis) {
-        window.speechSynthesis.onvoiceschanged = null;
+      if (enVoices.length > 0 && isMounted) {
+        setIsVoiceReady(true);
       }
     };
-  }, []);
+
+    setIsVoiceReady(false);
+    updateVoices();
+    window.speechSynthesis.addEventListener?.('voiceschanged', updateVoices);
+
+    // Some browsers never fire voiceschanged. Their default voice still works, so
+    // release the gate after a short grace period instead of blocking the app forever.
+    const fallbackTimeout = window.setTimeout(() => {
+      if (isMounted) {
+        logger.warn('[Speech] Timed out waiting for an English system voice; using the browser default.');
+        setIsVoiceReady(true);
+      }
+    }, 3500);
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(fallbackTimeout);
+      window.speechSynthesis.removeEventListener?.('voiceschanged', updateVoices);
+    };
+  }, [useBrowserTts]);
 
   // State transitions
   const updateStatus = useCallback((newStatus: RecordingStatus) => {
@@ -209,6 +316,9 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   const handleSttCompleted = useCallback(({ transcript: text, latencyMs }: { transcript: string; latencyMs: number }) => {
     clearTimeout(sttTimeoutRef.current ?? undefined);
     logger.log(`[STT] Completed in ${latencyMs}ms: "${text}"`);
+    clearTimeout(llmRenderTimeoutRef.current ?? undefined);
+    llmRenderTimeoutRef.current = null;
+    llmTextBufferRef.current = '';
     setLlmText('');
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
@@ -235,38 +345,30 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
   }, []);
 
   const handleLlmStreamChunk = useCallback(({ token }: { token: string }) => {
-    setLlmText((prev) => {
-      const nextText = prev + token;
+    // The first response text must be committed to the screen before the first
+    // TTS chunk may play. Two animation frames let React paint the new bubble.
+    if (!hasInitialResponseTextRef.current) {
+      hasInitialResponseTextRef.current = true;
+      if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(releaseInitialPlayback);
+        });
+      } else {
+        releaseInitialPlayback();
+      }
+    }
 
-      setChatHistory((history) => {
-        const lastMsg = history[history.length - 1];
-        if (lastMsg && lastMsg.sender === 'ai' && lastMsg.id === 'ai-current') {
-          return [
-            ...history.slice(0, -1),
-            {
-              ...lastMsg,
-              text: nextText,
-            },
-          ];
-        } else {
-          return [
-            ...history,
-            {
-              id: 'ai-current',
-              sender: 'ai',
-              text: token,
-              timestamp: Date.now(),
-            },
-          ];
-        }
-      });
-
-      return nextText;
-    });
-  }, []);
+    llmTextBufferRef.current += token;
+    // Render streamed text at most 12 times/sec. Rendering every token makes
+    // the full chat and 3D workspace reconcile unnecessarily on fast models.
+    if (!llmRenderTimeoutRef.current) {
+      llmRenderTimeoutRef.current = setTimeout(flushLlmText, 80);
+    }
+  }, [flushLlmText, releaseInitialPlayback]);
 
   const handleLlmStreamDone = useCallback(({ latencyMs, totalChunks, suggestions: suggestedAnswers }: { latencyMs: number; totalChunks?: number; suggestions?: string[] }) => {
     clearTimeout(llmTimeoutRef.current ?? undefined);
+    flushLlmText();
     logger.log(`[LLM] Stream done in ${latencyMs}ms. Total chunks: ${totalChunks}`);
 
     if (playoutQueueRef.current && typeof totalChunks === 'number') {
@@ -278,20 +380,16 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     } else {
       setSuggestions([]);
     }
-  }, []);
+  }, [flushLlmText]);
 
   const handleTtsAudioChunk = useCallback((data: any) => {
     logger.log(`[TTS] Received chunk sequence: ${data.sequenceNumber}`);
-    if (playoutQueueRef.current) {
-      playoutQueueRef.current.enqueue({
-        requestId: data.requestId,
-        sequenceNumber: data.sequenceNumber,
-        audio: data.audio,
-        sampleRate: data.sampleRate,
-        words: data.words,
-      });
+    if (!isInitialPlaybackReleasedRef.current) {
+      pendingInitialTtsChunksRef.current.push(data);
+      return;
     }
-  }, []);
+    enqueueTtsChunk(data);
+  }, [enqueueTtsChunk]);
 
   const handleSessionError = useCallback(({ message }: { message: string }) => {
     clearTimeout(sttTimeoutRef.current ?? undefined);
@@ -511,10 +609,16 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     updateStatus('THINKING');
     resetSpeechTranscript();
     setLlmText('');
+    clearTimeout(llmRenderTimeoutRef.current ?? undefined);
+    llmRenderTimeoutRef.current = null;
+    llmTextBufferRef.current = '';
     setChatHistory([]);
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
     setSuggestions([]);
+    hasInitialResponseTextRef.current = false;
+    isInitialPlaybackReleasedRef.current = false;
+    pendingInitialTtsChunksRef.current = [];
     
     playoutQueueRef.current?.stop();
     resetCaptureBuffers();
@@ -522,10 +626,9 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     topicRef.current = topic;
     targetBandRef.current = targetBand;
     ieltsPartRef.current = ieltsPart;
+    const voiceWarmup = warmBrowserSpeech();
 
     try {
-      connectSocket();
-
       if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
         audioContextRef.current = new window.AudioContext();
       }
@@ -536,13 +639,20 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
 
       if (!lipsyncManagerRef.current) {
         try {
-          const lipsync = new Lipsync({});
-          // Override default AudioContext and AnalyserNode with ours
+          // The library creates its own AudioContext by default. Replace it
+          // with the playback context, then close the unused one so we do not
+          // leak an extra audio graph for every session.
+          const lipsync: any = new Lipsync({ fftSize: 2048, historySize: 10 });
+          const unusedAudioContext = lipsync.audioContext as AudioContext;
+          if (unusedAudioContext && unusedAudioContext !== audioContext && unusedAudioContext.state !== 'closed') {
+            void unusedAudioContext.close();
+          }
           lipsync.audioContext = audioContext;
           const analyser = audioContext.createAnalyser();
           analyser.fftSize = 2048;
           lipsync.analyser = analyser;
           lipsync.dataArray = new Uint8Array(analyser.frequencyBinCount);
+          lipsync.binWidth = audioContext.sampleRate / analyser.fftSize;
           lipsyncManagerRef.current = lipsync;
         } catch (err) {
           logger.error('[Lipsync] Failed to initialize:', err);
@@ -581,6 +691,11 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
         updateStatus('IDLE');
       };
       playoutQueueRef.current = queue;
+
+      // Keep the opening LLM request behind the voice warmup. The warmup was
+      // started above while the click still counted as a user gesture.
+      await voiceWarmup;
+      connectSocket();
     } catch (err) {
       logger.error('[Audio] Failed to start recording:', err);
       updateStatus('ERROR');
@@ -593,6 +708,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     ttsRate,
     resetSpeechTranscript,
     resetCaptureBuffers,
+    warmBrowserSpeech,
     connectSocket,
     stopAudio,
     disconnectSocket,
@@ -717,11 +833,17 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     updateStatus('IDLE');
     resetSpeechTranscript();
     setLlmText('');
+    clearTimeout(llmRenderTimeoutRef.current ?? undefined);
+    llmRenderTimeoutRef.current = null;
+    llmTextBufferRef.current = '';
     setChatHistory([]);
     setCurrentPlayingSentence('');
     setHighlightedWordIndex(-1);
     setSuggestions([]);
     setCurrentlySpeakingText(null);
+    hasInitialResponseTextRef.current = false;
+    isInitialPlaybackReleasedRef.current = false;
+    pendingInitialTtsChunksRef.current = [];
   }, [forceCleanup, resetSpeechTranscript, updateStatus]);
 
   return {
@@ -748,6 +870,7 @@ export function useAudioRecorder(socketUrl: string): UseAudioRecorderReturn {
     ttsRate,
     changeTtsRate,
     availableVoices,
+    isVoiceReady,
     suggestions,
     speakText,
     currentlySpeakingText,

@@ -1,7 +1,7 @@
 import { useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { MeshPhysicalMaterial, SkinnedMesh, MathUtils, Object3D } from "three";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SkinnedMesh, MathUtils, Object3D } from "three";
 import { VISEMES } from "wawa-lipsync";
 import { RecordingStatus } from "shared-contracts";
 
@@ -9,50 +9,16 @@ interface CharacterProps {
   status: RecordingStatus;
   useBrowserTts: boolean;
   lipsyncManager: any;
+  onReady?: () => void;
   [key: string]: any;
 }
 
-export const Character = ({ status, useBrowserTts, lipsyncManager, ...props }: CharacterProps) => {
+export const Character = ({ status, useBrowserTts, lipsyncManager, onReady, ...props }: CharacterProps) => {
   const { scene, animations } = useGLTF("models/Santa.glb");
+  const renderedFramesRef = useRef(0);
+  const morphUpdateAccumulatorRef = useRef(0);
 
   const { actions, mixer } = useAnimations(animations, scene);
-
-  useEffect(() => {
-    scene.traverse((child: Object3D) => {
-      if ((child as any).isMesh) {
-        child.frustumCulled = false;
-        
-        const oldMaterial = (child as any).material;
-        const newMaterial = new MeshPhysicalMaterial();
-        
-        // Copy standard properties if they exist on the old material
-        if (oldMaterial.color) newMaterial.color.copy(oldMaterial.color);
-        if (oldMaterial.map) newMaterial.map = oldMaterial.map;
-        if (oldMaterial.roughnessMap) newMaterial.roughnessMap = oldMaterial.roughnessMap;
-        if (oldMaterial.metalnessMap) newMaterial.metalnessMap = oldMaterial.metalnessMap;
-        if (oldMaterial.normalMap) newMaterial.normalMap = oldMaterial.normalMap;
-        if (oldMaterial.normalScale && newMaterial.normalScale) newMaterial.normalScale.copy(oldMaterial.normalScale);
-        if (oldMaterial.aoMap) newMaterial.aoMap = oldMaterial.aoMap;
-        if (oldMaterial.aoMapIntensity !== undefined) newMaterial.aoMapIntensity = oldMaterial.aoMapIntensity;
-        if (oldMaterial.emissive) newMaterial.emissive.copy(oldMaterial.emissive);
-        if (oldMaterial.emissiveMap) newMaterial.emissiveMap = oldMaterial.emissiveMap;
-        if (oldMaterial.emissiveIntensity !== undefined) newMaterial.emissiveIntensity = oldMaterial.emissiveIntensity;
-        if (oldMaterial.opacity !== undefined) newMaterial.opacity = oldMaterial.opacity;
-        if (oldMaterial.transparent !== undefined) newMaterial.transparent = oldMaterial.transparent;
-        if (oldMaterial.alphaTest !== undefined) newMaterial.alphaTest = oldMaterial.alphaTest;
-        if (oldMaterial.side !== undefined) newMaterial.side = oldMaterial.side;
-        
-        // Apply custom physical values
-        newMaterial.roughness = 1;
-        newMaterial.ior = 2.2;
-        newMaterial.iridescence = 0.7;
-        newMaterial.iridescenceIOR = 1.3;
-        newMaterial.reflectivity = 1;
-        
-        (child as any).material = newMaterial;
-      }
-    });
-  }, [scene]);
 
   const [animation, setAnimation] = useState("Idle");
 
@@ -128,7 +94,22 @@ export const Character = ({ status, useBrowserTts, lipsyncManager, ...props }: C
     return () => clearTimeout(blinkTimeout);
   }, []);
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
+    // useGLTF resolving only proves that the file is decoded. Wait until the
+    // model has actually rendered twice so GPU buffers and shaders are warm.
+    if (onReady && renderedFramesRef.current < 2) {
+      renderedFramesRef.current += 1;
+      if (renderedFramesRef.current === 2) {
+        onReady();
+      }
+    }
+
+    // Morph targets are visually smooth at 30fps while updating them at every
+    // render frame is expensive on a skinned GLB with many visemes.
+    morphUpdateAccumulatorRef.current += delta;
+    if (morphUpdateAccumulatorRef.current < 1 / 30) return;
+    morphUpdateAccumulatorRef.current = 0;
+
     // 1. Blink
     lerpMorphTarget("eyeBlinkLeft", blink ? 1 : 0, 0.5);
     lerpMorphTarget("eyeBlinkRight", blink ? 1 : 0, 0.5);

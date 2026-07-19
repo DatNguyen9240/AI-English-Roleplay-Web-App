@@ -11,6 +11,7 @@ interface CameraManagerProps {
 export const CameraManager = ({ status }: CameraManagerProps) => {
   const controls = useThree((state) => (state as any).controls) as CameraControls | null;
   const locked = useRef(false);
+  const motionUpdateAccumulator = useRef(0);
 
   useEffect(() => {
     if (!controls) return;
@@ -48,7 +49,11 @@ export const CameraManager = ({ status }: CameraManagerProps) => {
   }, [controls, status]);
 
   useFrame((state, delta) => {
-    const lockedDelta = Math.max(Math.min(delta, 0.5), 0); // Prevent jump when resuming from tab switch
+    motionUpdateAccumulator.current += delta;
+    if (motionUpdateAccumulator.current < 1 / 30) return;
+
+    const lockedDelta = Math.max(Math.min(motionUpdateAccumulator.current, 0.5), 0);
+    motionUpdateAccumulator.current = 0;
     const t = state.clock.elapsedTime;
     if (locked.current) return;
     if (!controls) return;

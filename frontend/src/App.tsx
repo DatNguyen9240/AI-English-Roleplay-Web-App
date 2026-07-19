@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { useAudioRecorder } from '@/features/audio-core/hooks/useAudioRecorder';
 import { AudioDashboard } from '@/features/dashboard/components/AudioDashboard';
-import { PortfolioView } from '@/features/portfolio/components/PortfolioView';
 import { PageShell } from '@/components/PageShell';
 import { config } from '@/config';
+
+const PortfolioView = lazy(() => import('@/features/portfolio/components/PortfolioView').then((module) => ({
+  default: module.PortfolioView,
+})));
 
 function App(): React.ReactElement {
   const [activeTab, setActiveTab] = useState<'practice' | 'about'>('practice');
@@ -29,6 +32,7 @@ function App(): React.ReactElement {
     ttsRate,
     changeTtsRate,
     availableVoices,
+    isVoiceReady,
     suggestions,
     speakText,
     currentlySpeakingText,
@@ -63,18 +67,16 @@ function App(): React.ReactElement {
           ttsRate={ttsRate}
           changeTtsRate={changeTtsRate}
           availableVoices={availableVoices}
+          isVoiceReady={isVoiceReady}
           useBrowserTts={useBrowserTts}
           toggleBrowserTts={toggleBrowserTts}
           useBrowserStt={useBrowserStt}
           toggleBrowserStt={toggleBrowserStt}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
         />
       ) : (
-        <PortfolioView
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-        />
+        <Suspense fallback={null}>
+          <PortfolioView setActiveTab={setActiveTab} />
+        </Suspense>
       )}
     </PageShell>
   );
